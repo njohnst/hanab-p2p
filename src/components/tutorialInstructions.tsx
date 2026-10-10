@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import Button, { ButtonSize } from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
+import { gameUrl, queryParam, withBasePath } from "~/lib/routes";
 import { useTutorialAction } from "~/lib/tutorial";
 
 export default function TutorialInstructions() {
@@ -10,7 +11,7 @@ export default function TutorialInstructions() {
   const router = useRouter();
   const action = useTutorialAction();
   const { t } = useTranslation();
-  const originalGameId = router.query["back-to-game"];
+  const originalGameId = queryParam(router.query["back-to-game"]);
 
   if (!showTutorial) {
     return null;
@@ -27,7 +28,7 @@ export default function TutorialInstructions() {
           )}
         />
         {originalGameId && (
-          <a className="mt3" href={`/${originalGameId}`}>
+          <a className="mt3" href={withBasePath(gameUrl(originalGameId))}>
             <Button primary size={ButtonSize.SMALL} text={t("backToGame", "Back to game")} />
           </a>
         )}

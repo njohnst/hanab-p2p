@@ -2,24 +2,27 @@ import Fireworks from "fireworks-canvas";
 import Head from "next/head";
 import Image from "next/legacy/image";
 import { useRouter } from "next/router";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import LanguageSelector, { Languages } from "~/components/languageSelector";
+import LanguageSelector from "~/components/languageSelector";
 import Rules from "~/components/rules";
 import Button, { ButtonSize } from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
 import useLocalStorage from "~/hooks/localStorage";
 import { logFailedPromise } from "~/lib/errors";
+import { gameUrl, withBasePath } from "~/lib/routes";
 
 export default function Home() {
   const router = useRouter();
   const { t } = useTranslation();
-  const [gameId] = useLocalStorage("gameId", null);
-  const [playerId] = useLocalStorage("playerId", null);
+  const [storedGameId] = useLocalStorage<string>("gameId", null);
+  const [mounted, setMounted] = useState(false);
   const rulesRef = useRef<HTMLDivElement>();
   const fireworksRef = useRef();
 
-  const lastGame = gameId && playerId ? { gameId } : null;
+  // The page is pre-rendered without access to localStorage: only show what it holds once mounted
+  useEffect(() => setMounted(true), []);
+  const lastGameId = mounted ? storedGameId : null;
 
   useEffect(() => {
     router.prefetch("/new-game").catch(logFailedPromise);
@@ -56,10 +59,6 @@ export default function Home() {
     >
       <Head>
         <title>Hanab</title>
-        <link href="/" hrefLang="x-default" rel="alternate" />
-        {Object.keys(Languages).map((locale) => (
-          <link key={locale} href={`/${locale}`} hrefLang={locale} rel="alternate" />
-        ))}
       </Head>
       <div className="absolute top-1 right-2">
         <LanguageSelector outlined />
@@ -71,7 +70,7 @@ export default function Home() {
               alt={t("landingImageAlt", "Hanabcards game online logo")}
               height={256}
               priority={true}
-              src={"/static/hanab.png"}
+              src={withBasePath("/static/hanab.png")}
               width={256}
             />
           </div>
@@ -94,18 +93,13 @@ export default function Home() {
             text={t("joinRoom", "Join a room")}
             onClick={() => router.push("/join-game")}
           />
-          {lastGame && (
+          {lastGameId && (
             <Button
               className="mb4"
               id="join-room"
               size={ButtonSize.LARGE}
               text={t("rejoinGame", "Rejoin game")}
-              onClick={() =>
-                router.replace({
-                  pathname: "/play",
-                  query: lastGame,
-                })
-              }
+              onClick={() => router.replace(gameUrl(lastGameId))}
             />
           )}
           <Button

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import Button, { ButtonSize } from "~/components/ui/button";
 import { useGame, useSelfPlayer } from "~/hooks/game";
 import { sendMessage } from "~/lib/actions";
-import { updateGame } from "~/lib/firebase";
+import { updateGame } from "~/lib/network";
 import { uniqueId } from "~/lib/id";
 import { logFailedPromise } from "~/lib/errors";
 

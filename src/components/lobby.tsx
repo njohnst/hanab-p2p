@@ -1,13 +1,13 @@
 import { last } from "lodash";
 import Head from "next/head";
 import Link from "next/link";
-import { useRouter } from "next/router";
 import React, { FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Button from "~/components/ui/button";
 import { Checkbox, Field, TextInput } from "~/components/ui/forms";
 import Txt, { TxtSize } from "~/components/ui/txt";
 import { useGame, useSelfPlayer } from "~/hooks/game";
+import { absoluteGameUrl, learnUrl } from "~/lib/routes";
 import { GameMode, IPlayer } from "~/lib/state";
 
 function listPlayerNames(players: IPlayer[]) {
@@ -45,7 +45,6 @@ function Meta() {
 }
 
 interface Props {
-  host: string;
   onJoinGame: (player: Omit<IPlayer, "id">) => void;
   onAddBot: () => void;
   onStartGame: () => void;
@@ -54,12 +53,11 @@ interface Props {
 const NAME_KEY = "name";
 
 export default function Lobby(props: Props) {
-  const { host, onJoinGame, onAddBot, onStartGame } = props;
+  const { onJoinGame, onAddBot, onStartGame } = props;
   const { t } = useTranslation();
 
   const game = useGame();
   const selfPlayer = useSelfPlayer(game);
-  const router = useRouter();
   const [name, setName] = useState("");
   const [bot, setBot] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -68,7 +66,7 @@ export default function Lobby(props: Props) {
   const canJoin = (game.options.gameMode === GameMode.PASS_AND_PLAY || !selfPlayer) && !gameFull;
   const canStart = gameFull;
 
-  const shareLink = `${host}/${router.query.gameId}`;
+  const shareLink = absoluteGameUrl(game.id);
   const inputRef = React.createRef<HTMLInputElement>();
   function copy() {
     inputRef.current.select();
@@ -146,11 +144,7 @@ export default function Lobby(props: Props) {
                     <div className="mt5">
                       <Txt className="txt-yellow mr2 ttu" size={TxtSize.XXSMALL} value={t("new")} />
                       <Txt value={t("learnWhileWaiting")} />
-                      <Link
-                        passHref
-                        className="ml2 underline lavender ttu pointer"
-                        href={`/learn?back-to-game=${game.id}`}
-                      >
+                      <Link passHref className="ml2 underline lavender ttu pointer" href={learnUrl(game.id)}>
                         <Txt value={t("go")} />
                       </Link>
                     </div>

@@ -5,18 +5,16 @@
   "scripts": {
     "dev": "cross-env NODE_OPTIONS='--openssl-legacy-provider' next dev",
     "build": "cross-env NODE_OPTIONS='--openssl-legacy-provider' next build",
-    "start": "cross-env NODE_OPTIONS='--openssl-legacy-provider' next start",
-    "lint": "eslint '**/*.{ts,tsx}'"
+    "lint": "eslint '**/*.{ts,tsx}'",
+    "test": "vitest run --passWithNoTests",
+    "serve:static": "node scripts/serve-static.mjs"
   },
   "dependencies": {
-    "@sentry/browser": "^8.9.2",
-    "@sentry/nextjs": "^8.25.0",
     "@types/classnames": "^2.2.11",
     "@types/lodash": "^4.14.168",
     "@types/react-dom": "17",
     "@types/react-popover": "^0.5.3",
     "classnames": "^2.2.6",
-    "firebase": "^8.3.0",
     "fireworks-canvas": "^2.6.0",
     "husky": "^5.1.3",
     "i18next": "^19.9.2",
@@ -26,21 +24,18 @@
     "mem": "^8.0.0",
     "moment": "^2.29.1",
     "next": "13",
-    "next-compose-plugins": "^2.2.1",
-    "next-iron-session": "^4.2.0",
-    "next-offline": "^5.0.5",
     "nprogress": "^0.2.0",
+    "qrcode": "1.5.4",
     "rc-slider": "^11.1.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-fullstory": "^1.4.0",
-    "react-ga4": "^2.1.0",
     "react-i18next": "^11.8.10",
     "react-modal": "^3.12.1",
     "react-pose": "^4.0.10",
     "react-tiny-popover": "^8.1.4",
     "shortid": "^2.2.16",
     "shuffle-seed": "^1.1.6",
+    "trystero": "0.25.4",
     "type-fest": "^1.1.3",
     "unique-names-generator": "^4.7.1",
     "webpack": "5",
@@ -49,27 +44,28 @@
   "devDependencies": {
     "@types/node": "^18.0.0",
     "@types/nprogress": "^0.2.0",
+    "@types/qrcode": "1.5.6",
     "@types/react": "17.0.46",
     "@types/react-modal": "^3.12.0",
     "@typescript-eslint/eslint-plugin": "4.33.0",
     "@typescript-eslint/parser": "^4.18.0",
     "cross-env": "^7.0.3",
-    "dotenv": "^10.0.0",
     "eslint": "^7.22.0",
     "eslint-config-next": "^14.2.5",
     "eslint-config-prettier": "^8.1.0",
     "eslint-plugin-prettier": "^3.3.1",
     "eslint-plugin-react": "^7.22.0",
-    "firebase-server": "^1.1.0",
     "jimp": "^0.16.1",
     "lint-staged": "^10.5.4",
     "postcss-color-mod-function": "^3.0.3",
     "prettier": "^2.2.1",
     "prettier-plugin-organize-imports": "^2.1.0",
     "responsive-loader": "^2.3.0",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vite": "6.4.4",
+    "vitest": "4.1.11"
   },
   "engines": {
-    "node": "24.x"
+    "node": ">=18.17"
   }
 }

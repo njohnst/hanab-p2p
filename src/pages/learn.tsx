@@ -15,10 +15,11 @@ import Vignette from "~/components/vignette";
 import useLocalStorage from "~/hooks/localStorage";
 import { getColors, newGame, numbers } from "~/lib/actions";
 import { logEvent } from "~/lib/analytics";
-import { updateGame } from "~/lib/firebase";
-import { readableUniqueId } from "~/lib/id";
-import { GameMode, GameVariant, IColor, IGameHintsLevel, IHintType, INumber } from "~/lib/state";
 import { logFailedPromise } from "~/lib/errors";
+import { readableUniqueId } from "~/lib/id";
+import { updateGame } from "~/lib/network";
+import { gameUrl, queryParam, withBasePath } from "~/lib/routes";
+import { GameMode, GameVariant, IColor, IGameHintsLevel, IHintType, INumber } from "~/lib/state";
 
 function card(color: IColor, number: INumber, size = CardSize.XSMALL, position?: number) {
   return (
@@ -50,9 +51,9 @@ function token(color: string, size = 1) {
 const Divider = () => <div className="mv4 bt b--yellow w4" />;
 
 function useSteps(colorBlindMode: boolean, setColorBlindMode: (newColorBlindMode: boolean) => void) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
-  const gameId = router.query["back-to-game"];
+  const gameId = queryParam(router.query["back-to-game"]);
 
   const amountPerNumber = {
     1: 3,
@@ -66,7 +67,7 @@ function useSteps(colorBlindMode: boolean, setColorBlindMode: (newColorBlindMode
     {
       html: (
         <>
-          {router.locale !== "en" && (
+          {i18n.language !== "en" && (
             <div className="mb4 bg-white br2 pa2 main-dark b--yellow ba bw1">
               <Txt value={`🚧 ${t("learnHanabEnglish")}`} />
               <a
@@ -293,7 +294,7 @@ function useSteps(colorBlindMode: boolean, setColorBlindMode: (newColorBlindMode
           <Title className="ttu">{t("learn.ready.title", "Ready?")}</Title>
           <Paragraph>{t("learn.ready.1", "Let's jump into a trial game to try all this out!")}</Paragraph>
           {gameId && (
-            <Link passHref className="lavender pointer" href={`/${gameId}`}>
+            <Link passHref className="lavender pointer" href={gameUrl(gameId)}>
               <Txt value={t("backToGame", "Go back to my game instead")} />
             </Link>
           )}
@@ -364,12 +365,7 @@ export default function Learn() {
 
     logEvent("Game", "Tutorial created");
 
-    const originalGameId = router.query["back-to-game"];
-    if (originalGameId) {
-      await router.push(`/${id}?back-to-game=${originalGameId}`);
-    } else {
-      await router.push(`/${id}`);
-    }
+    await router.push(gameUrl(id, { "back-to-game": queryParam(router.query["back-to-game"]) }));
   };
 
   return (
@@ -377,7 +373,7 @@ export default function Learn() {
       <HomeButton className="absolute top-1 right-1 z-2" />
 
       <div className="fixed top-0 right-0 w4 h4 ma4 o-50 ">
-        <Image alt="Hanab cards game online" height={256} src="/static/hanab.png" width={256} />
+        <Image alt="Hanab cards game online" height={256} src={withBasePath("/static/hanab.png")} width={256} />
       </div>
 
       <div className="relative flex items-center h-90 w-90 w-50-l center">

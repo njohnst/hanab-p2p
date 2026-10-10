@@ -228,7 +228,8 @@ button {
 }
 
 .bg-multicolor {
-  background-image: url('/static/multicolor.svg');
+  /* Relative to this file so the bundler emits it under the base path */
+  background-image: url('../images/multicolor.svg');
   background-size: contain
 }
 

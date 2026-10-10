@@ -9,3 +9,7 @@ node_modules
 .vercel
 Notes
 
+
+# static export
+out
+tsconfig.tsbuildinfo

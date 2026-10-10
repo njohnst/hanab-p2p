@@ -1,38 +1,68 @@
 import dynamic from "next/dynamic";
-import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
 import { Game } from "~/components/game";
-import useConnectivity from "~/hooks/connectivity";
+import WaitingForGame from "~/components/waitingForGame";
 import { GameContext } from "~/hooks/game";
 import { loadUserPreferences, UserPreferencesContext } from "~/hooks/userPreferences";
-import { subscribeToGame } from "~/lib/firebase";
+import { logFailedPromise } from "~/lib/errors";
+import { ConnectionInfo, loadGame, subscribeToConnection, subscribeToGame } from "~/lib/network";
 import IGameState from "~/lib/state";
 
-function SsrFreeGameIndex(props: { host: string; game: IGameState }) {
-  const { game: initialGame, host } = props;
+interface Props {
+  gameId: string;
+}
+
+function SsrFreeGameIndex(props: Props) {
+  const { gameId } = props;
   const [userPreferences, setUserPreferences] = useState(loadUserPreferences());
-  const [game, setGame] = useState<IGameState>(initialGame);
-  const online = useConnectivity();
-  const router = useRouter();
+  const [game, setGame] = useState<IGameState>(null);
+  const [notSharedYet, setNotSharedYet] = useState(false);
+  const [connection, setConnection] = useState<ConnectionInfo>(null);
+
   /**
-   * Load game from database
+   * Follow the game: from this browser's replica when there is one, otherwise
+   * as soon as a peer shares it.
    */
   useEffect(() => {
-    if (!online) return;
-
-    return subscribeToGame(game.id as string, (game) => {
-      if (!game) {
-        return router.push("/404");
-      }
-
+    return subscribeToGame(gameId, (game) => {
       setGame({ ...game, synced: true });
     });
-  }, [online, game?.id, router]);
+  }, [gameId]);
+
+  /**
+   * Tell "connecting" apart from "nobody has shared it yet" for the waiting screen.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    loadGame(gameId)
+      .then((loaded) => {
+        if (cancelled) return;
+        if (loaded) {
+          setGame((current) => current || { ...loaded, synced: true });
+        } else {
+          setNotSharedYet(true);
+        }
+      })
+      .catch(logFailedPromise);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId]);
+
+  useEffect(() => {
+    return subscribeToConnection(gameId, setConnection);
+  }, [gameId]);
+
+  if (!game) {
+    return <WaitingForGame connection={connection} gameId={gameId} notSharedYet={notSharedYet} />;
+  }
 
   return (
     <GameContext.Provider value={game}>
       <UserPreferencesContext.Provider value={[userPreferences, setUserPreferences]}>
-        <Game host={host} onGameChange={setGame} />
+        <Game onGameChange={setGame} />
       </UserPreferencesContext.Provider>
     </GameContext.Provider>
   );

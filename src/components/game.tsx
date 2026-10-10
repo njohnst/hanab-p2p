@@ -26,18 +26,18 @@ import { commitAction, getMaximumPossibleScore, getScore, joinGame, newGame, rec
 import { play } from "~/lib/ai";
 import { cheat } from "~/lib/ai-cheater";
 import { logEvent } from "~/lib/analytics";
-import { setNotification, setReaction, updateGame } from "~/lib/firebase";
-import { uniqueId } from "~/lib/id";
-import IGameState, { GameMode, IAction, IGameHintsLevel, IGameStatus, IPlayer } from "~/lib/state";
 import { logFailedPromise } from "~/lib/errors";
+import { uniqueId } from "~/lib/id";
+import { isAuthority, setNotification, setReaction, subscribeToConnection, updateGame } from "~/lib/network";
+import { gameUrl, summaryUrl, withBasePath } from "~/lib/routes";
+import IGameState, { GameMode, IAction, IGameHintsLevel, IGameStatus, IPlayer } from "~/lib/state";
 
 interface Props {
-  host: string;
   onGameChange: (game: IGameState) => void;
 }
 
 export function Game(props: Props) {
-  const { host, onGameChange } = props;
+  const { onGameChange } = props;
   const { t } = useTranslation();
 
   const router = useRouter();
@@ -60,6 +60,16 @@ export function Game(props: Props) {
   const [userPreferences] = useUserPreferences();
   useNotifications();
   useSoundEffects();
+
+  /**
+   * Only one tab plays the bots' turns: the game's authority (see ~/lib/network).
+   * Pass & play and tutorial games live in this tab only, so it always is.
+   */
+  const [authority, setAuthority] = useState(() => isAuthority(game.id));
+  useEffect(() => {
+    return subscribeToConnection(game.id, (connection) => setAuthority(connection.isAuthority));
+  }, [game.id]);
+  const runsBots = authority || game.options.gameMode === GameMode.PASS_AND_PLAY || !!game.options.tutorial;
 
   /**
    * Resets the selected area when a player plays,
@@ -86,12 +96,14 @@ export function Game(props: Props) {
   }, [game.turnsHistory.length, game.players.length, game.status, game.options.gameMode, game.options.playersCount]);
 
   /**
-   * Play for bots.
+   * Play for bots, on the authority only. The authority runs them even when
+   * it isn't seated (a spectator that kept the game going), otherwise the
+   * bots would stall whenever no seated player is the authority.
    */
   useEffect(() => {
+    if (!runsBots) return;
     if (!game.synced) return;
     if (game.status !== IGameStatus.ONGOING) return;
-    if (!selfPlayer) return;
     if (!currentPlayer.bot) return;
 
     try {
@@ -114,7 +126,7 @@ export function Game(props: Props) {
     } catch (e) {
       console.error(`[Bot] Error during play:`, e);
     }
-  }, [game.currentPlayer, game.status, game.synced, game, currentPlayer, selfPlayer]);
+  }, [game.currentPlayer, game.status, game.synced, game, currentPlayer, runsBots]);
 
   /**
    * At the start of the game, compute and store the maximum score
@@ -235,11 +247,10 @@ export function Game(props: Props) {
     onStopReplay();
     const nextGameId = liveGame().nextGameId;
     setDisplayStats(false);
-    const newUrl = `/${nextGameId}`;
-    location.assign(newUrl);
+    location.assign(withBasePath(gameUrl(nextGameId)));
   }
 
-  // Captured once Firebase has synced the game, so we don't redirect when the
+  // Captured once the game has synced, so we don't redirect when the
   // user navigated back to a game whose nextGameId was already set on arrival
   // — only redirect when the "New game" action happens during this visit.
   const initialNextGameIdRef = useRef<string | null | undefined>(undefined);
@@ -259,7 +270,7 @@ export function Game(props: Props) {
     if (game.nextGameId === initialNextGameIdRef.current) return;
 
     setDisplayStats(false);
-    location.assign(`/${game.nextGameId}`);
+    location.assign(withBasePath(gameUrl(game.nextGameId)));
   }, [game.synced, game.nextGameId]);
 
   function onJoinGame(player: Omit<IPlayer, "id">) {
@@ -447,7 +458,7 @@ export function Game(props: Props) {
     await updateGame(nextGame);
     log("Next Game Persisted");
     const updatedGame = { ...finishedGame, nextGameId: nextGame.id };
-    // Pre-set the ref so the redirect effect treats the Firebase echo as
+    // Pre-set the ref so the redirect effect treats the network echo as
     // "no change from arrival" and skips location.assign — otherwise the
     // clicker would navigate twice (router.push below + location.assign from
     // the effect), leaving a duplicate history entry that breaks the back
@@ -458,7 +469,7 @@ export function Game(props: Props) {
     onGameChange(nextGame);
     log(`GameChange fired for ${nextGame.id}`);
     logEvent("Game", "Next Game Created");
-    await router.push(`/${nextGame.id}`);
+    await router.push(gameUrl(nextGame.id));
     log("Router updated with new link");
   }
   function liveGame() {
@@ -476,7 +487,7 @@ export function Game(props: Props) {
           {selectedArea.type === ActionAreaType.MENU && <MenuArea onCloseArea={onCloseArea} />}
 
           {game.status === IGameStatus.LOBBY && (
-            <Lobby host={host} onAddBot={onAddBot} onJoinGame={onJoinGame} onStartGame={onStartGame} />
+            <Lobby onAddBot={onAddBot} onJoinGame={onJoinGame} onStartGame={onStartGame} />
           )}
 
           {selectedArea.type === ActionAreaType.ROLLBACK && (
@@ -595,7 +606,7 @@ export function Game(props: Props) {
                       size={ButtonSize.TINY}
                       text={t("summary")}
                       onClick={() => {
-                        router.push(`/${game.id}/summary`).catch(logFailedPromise);
+                        router.push(summaryUrl(game.id)).catch(logFailedPromise);
                       }}
                     />
                   </div>

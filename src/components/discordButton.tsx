@@ -1,5 +1,6 @@
 import Image from "next/legacy/image";
 import React from "react";
+import { withBasePath } from "~/lib/routes";
 
 export default function DiscordButton() {
   return (
@@ -10,7 +11,7 @@ export default function DiscordButton() {
       target="_blank"
       title="Discord"
     >
-      <Image alt="Discord" height={38} src="/static/discord.svg" width={112} />
+      <Image alt="Discord" height={38} src={withBasePath("/static/discord.svg")} width={112} />
       <style jsx>
         {`
           .discord-button {

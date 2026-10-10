@@ -9,8 +9,9 @@ import Txt, { TxtSize } from "~/components/ui/txt";
 import useLocalStorage from "~/hooks/localStorage";
 import { newGame } from "~/lib/actions";
 import { logEvent } from "~/lib/analytics";
-import { updateGame } from "~/lib/firebase";
 import { generateShuffleSeed, readableUniqueId } from "~/lib/id";
+import { updateGame } from "~/lib/network";
+import { gameUrl } from "~/lib/routes";
 import { GameMode, GameVariant, IGameHintsLevel } from "~/lib/state";
 
 const PlayerCounts = [2, 3, 4, 5];
@@ -94,7 +95,7 @@ export default function NewGame() {
 
     logEvent("Game", "Game created");
 
-    await router.push(`/${gameId}`);
+    await router.push(gameUrl(gameId));
   }
 
   return (

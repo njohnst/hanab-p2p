@@ -4,7 +4,8 @@ import { useGame, useSelfPlayer } from "~/hooks/game";
 import usePrevious from "~/hooks/previous";
 import { useReplay } from "~/hooks/replay";
 import { useUserPreferences } from "~/hooks/userPreferences";
-import { setNotification } from "~/lib/firebase";
+import { setNotification } from "~/lib/network";
+import { withBasePath } from "~/lib/routes";
 import { playSound, vibrate } from "~/lib/sound";
 import { isCardAction, isDiscardAction, isHintAction } from "~/lib/state";
 
@@ -14,13 +15,13 @@ type ActionSoundMap = {
 };
 
 const SoundsForAction: ActionSoundMap = {
-  "Rewind": "/static/sounds/rewind.mp3",
-  "Hint": "/static/sounds/swoosh.wav  ",
-  "Discard": "/static/sounds/card-scrape.mp3",
-  "Strike": "/static/sounds/strike.mp3",
+  "Rewind": withBasePath("/static/sounds/rewind.mp3"),
+  "Hint": withBasePath("/static/sounds/swoosh.wav"),
+  "Discard": withBasePath("/static/sounds/card-scrape.mp3"),
+  "Strike": withBasePath("/static/sounds/strike.mp3"),
   "SilentStrike": undefined,
-  "Played": "/static/sounds/play.mp3",
-  "Played-5": "/static/sounds/play-5.mp3",
+  "Played": withBasePath("/static/sounds/play.mp3"),
+  "Played-5": withBasePath("/static/sounds/play-5.mp3"),
 };
 
 export function useSoundEffects() {
@@ -40,7 +41,7 @@ export function useSoundEffects() {
   useEffect(() => {
     if (!selfPlayer?.notified) return;
 
-    playSound(`/static/sounds/bell.mp3`);
+    playSound(withBasePath("/static/sounds/bell.mp3"));
     vibrate(200);
     const timeout = setTimeout(() => setNotification(game, selfPlayer, false), 10000);
 

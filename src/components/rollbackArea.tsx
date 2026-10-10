@@ -5,7 +5,7 @@ import { Modal } from "~/components/ui/modal";
 import Txt, { TxtSize } from "~/components/ui/txt";
 import { useGame } from "~/hooks/game";
 import { getStateAtTurn } from "~/lib/actions";
-import { updateGame } from "~/lib/firebase";
+import { updateGame } from "~/lib/network";
 import IGameState from "~/lib/state";
 import { logFailedPromise } from "~/lib/errors";
 

@@ -1,56 +1,29 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
+/**
+ * Fully static build (`next build` writes `out/`), servable from any static host.
+ *
+ * Set NEXT_PUBLIC_BASE_PATH to serve the app from a sub-path, e.g. "/hanabi"
+ * for a GitHub Pages project site. Keep the normalisation below in sync with
+ * src/lib/routes.ts.
+ */
+function normalizeBasePath(value) {
+  const trimmed = (value || "").trim().replace(/\/+$/, "");
+  if (!trimmed) {
+    return "";
+  }
 
-require("dotenv").config();
-const webpack = require("webpack");
-const { withSentryConfig } = require("@sentry/nextjs");
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
 
-const moduleExports = {
-  // next config
-};
+const basePath = normalizeBasePath(process.env.NEXT_PUBLIC_BASE_PATH);
 
-const sentryWebpackPluginOptions = {
-  // sentry config
-};
-
-const withPlugins = require("next-compose-plugins");
-
-module.exports = async (phase, { defaultConfig }) => {
-  delete defaultConfig["webpackDevMiddleware"];
-  delete defaultConfig["configOrigin"];
-  delete defaultConfig["target"];
-  delete defaultConfig["webpack5"];
-  delete defaultConfig.amp["canonicalBase"];
-
-  const localConfig = {
-    productionBrowserSourceMaps: true,
-    assetPrefix: "/",
-    experimental: {},
-    images: {
-      domains: ["cdn.buymeacoffee.com", "localhost"],
-    },
-    i18n: {
-      locales: ["en", "fr", "es", "it", "nl", "ru", "pt", "de", "sk", "zh"],
-      defaultLocale: "en",
-    },
-    webpack: (config, { isServer, buildId }) => {
-      config.plugins.push(
-        new webpack.DefinePlugin({
-          "process.env.SENTRY_RELEASE": JSON.stringify(buildId),
-        })
-      );
-
-      if (!isServer) {
-        config.resolve.alias["@sentry/node"] = "@sentry/browser";
-      }
-
-      return config;
-    },
-  };
-
-  return {
-    ...withPlugins([], withSentryConfig(moduleExports, sentryWebpackPluginOptions))(phase, {
-      config: defaultConfig,
-    }),
-    ...localConfig,
-  };
+/** @type {import('next').NextConfig} */
+module.exports = {
+  output: "export",
+  trailingSlash: true,
+  basePath,
+  assetPrefix: basePath,
+  images: {
+    unoptimized: true,
+  },
+  productionBrowserSourceMaps: true,
 };

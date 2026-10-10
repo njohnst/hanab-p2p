@@ -1,19 +1,17 @@
-import React from "react";
+import React, { useEffect } from "react";
 import LoadingScreen from "~/components/loadingScreen";
-import withSession from "~/lib/session";
+import { resetPlayerId } from "~/lib/playerId";
+import { withBasePath } from "~/lib/routes";
 
-export const getServerSideProps = withSession(async function (ctx) {
-  ctx.req.session.destroy();
-  await ctx.req.session.save();
-
-  ctx.res.statusCode = 302;
-  ctx.res.setHeader("Location", "/");
-
-  return {
-    props: {},
-  };
-});
-
+/**
+ * Forget this browser's player id, then go home. A full page load (rather
+ * than a client-side navigation) makes the whole app pick up the new id.
+ */
 export default function ResetSession() {
+  useEffect(() => {
+    resetPlayerId();
+    window.location.replace(withBasePath("/"));
+  }, []);
+
   return <LoadingScreen />;
 }

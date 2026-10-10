@@ -1,27 +1,11 @@
-import ReactGA from "react-ga4";
+/**
+ * Analytics used to go to Google Analytics. This static, serverless fork does
+ * not talk to any third-party service, so every export is a no-op kept with
+ * its original signature to leave call sites untouched.
+ */
 
-const NODE_ENV = process.env.NODE_ENV;
-const GOOGLE_ANALYTICS_ID = process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID;
+export const initAnalytics: () => void = () => undefined;
 
-const isDevelopment = NODE_ENV === "development";
+export const logPageView: () => void = () => undefined;
 
-export function initAnalytics() {
-  if (isDevelopment) return;
-
-  if (GOOGLE_ANALYTICS_ID) {
-    ReactGA.initialize(GOOGLE_ANALYTICS_ID);
-  }
-}
-
-export function logPageView() {
-  if (isDevelopment) return;
-
-  ReactGA.set({ page: window.location.pathname });
-  ReactGA.set({ hitType: "pageview", page: window.location.pathname });
-}
-
-export function logEvent(category: string, action: string, options = {}) {
-  if (isDevelopment) return;
-
-  ReactGA.event({ category, action, ...options });
-}
+export const logEvent: (category: string, action: string, options?: Record<string, unknown>) => void = () => undefined;

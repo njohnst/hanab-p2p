@@ -5,15 +5,14 @@ import Button from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
 
 interface Props {
-  statusCode: number;
+  statusCode?: number;
 }
 
+/**
+ * Client-side error page. The app is a static export: there is no server to
+ * report a status code, so it's only shown when Next passes one.
+ */
 export default class Error extends React.Component<Props> {
-  static getInitialProps({ res, err }) {
-    const statusCode = res ? res.statusCode : err ? err.statusCode : null;
-    return { statusCode };
-  }
-
   render() {
     const { statusCode } = this.props;
 

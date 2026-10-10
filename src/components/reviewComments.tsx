@@ -4,7 +4,7 @@ import { Popover, ArrowContainer } from "react-tiny-popover";
 import TextFieldDialog from "~/components/textFieldDialog";
 import Txt from "~/components/ui/txt";
 import { useGame, useSelfPlayer } from "~/hooks/game";
-import { updateGame } from "~/lib/firebase";
+import { updateGame } from "~/lib/network";
 import { isGameFinished } from "~/lib/game";
 import { addOrReplaceReviewComment, findComment } from "~/lib/reviewComments";
 import { IGameStatus, IReviewComment } from "~/lib/state";

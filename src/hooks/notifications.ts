@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useCurrentPlayer, useGame, useSelfPlayer } from "~/hooks/game";
+import { withBasePath } from "~/lib/routes";
 import { IGameStatus } from "~/lib/state";
 
 export function useNotifications() {
@@ -31,7 +32,7 @@ export function useNotifications() {
 
     const title = "Your turn!";
     const options = {
-      icon: "/static/hanab-192.png",
+      icon: withBasePath("/static/hanab-192.png"),
     };
 
     try {

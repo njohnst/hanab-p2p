@@ -4,33 +4,21 @@ import { useTranslation } from "react-i18next";
 import HomeButton from "~/components/homeButton";
 import Button, { ButtonSize } from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
-import { loadPublicGames, subscribeToPublicGames } from "~/lib/firebase";
-import IGameState from "~/lib/state";
+import { logFailedPromise } from "~/lib/errors";
+import { PublicGame, subscribeToPublicGames } from "~/lib/network";
+import { gameUrl } from "~/lib/routes";
 
-interface Props {
-  games: IGameState[];
-}
-
-export const getServerSideProps = async () => {
-  const games = await loadPublicGames();
-
-  return {
-    props: {
-      games,
-    },
-  };
-};
-
-export default function JoinGame(props: Props) {
-  const { games: initialGames } = props;
-
+export default function JoinGame() {
   const router = useRouter();
   const { t } = useTranslation();
 
-  const [games, setGames] = useState<IGameState[]>(initialGames);
+  const [games, setGames] = useState<PublicGame[]>([]);
 
+  /**
+   * Public games in their lobby, as announced by their players' browsers.
+   */
   useEffect(() => {
-    subscribeToPublicGames((games) => {
+    return subscribeToPublicGames((games) => {
       setGames(games);
     });
   }, []);
@@ -48,7 +36,7 @@ export default function JoinGame(props: Props) {
               className="ma2"
               size={ButtonSize.LARGE}
               text={t("createRoom", "Create a room")}
-              onClick={() => router.push("/new-game")}
+              onClick={() => router.push("/new-game").catch(logFailedPromise)}
             />
           </>
         )}
@@ -57,13 +45,13 @@ export default function JoinGame(props: Props) {
             <Txt className="nowrap mb6" size={TxtSize.LARGE} value={t("availableRooms", "Available rooms")} />
             {games.map((game) => (
               <div key={game.id} className="flex justify-between items-center mb3 w-100 mt3">
-                <Txt className="mr4 silver" value={`${game.players.length} / ${game.options.playersCount}`} />
-                <Txt className="flex-grow-1" value={`${game.players.map((p) => p.name).join(", ")}`} />
+                <Txt className="mr4 silver" value={`${game.playersNames.length} / ${game.playersCount}`} />
+                <Txt className="flex-grow-1" value={game.playersNames.join(", ")} />
                 <Button
                   className="ml2 flex justify-center"
                   size={ButtonSize.SMALL}
                   text={t("join")}
-                  onClick={() => router.push(`/${game.id}`)}
+                  onClick={() => router.push(gameUrl(game.id)).catch(logFailedPromise)}
                 />
               </div>
             ))}
