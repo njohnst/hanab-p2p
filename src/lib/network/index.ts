@@ -6,103 +6,45 @@
  * setNotification, ...) so call sites barely change, and adds connection
  * introspection for the peer-to-peer world.
  *
- * TEMPORARY IMPLEMENTATION: a single-browser backend (localStorage replicas +
- * BroadcastChannel between tabs), so the static-export work can run before
- * the WebRTC sync engine lands. The WebRTC implementation (see
- * docs/P2P_DESIGN.md) replaces the bodies below while keeping every exported
- * signature and its documented behaviour.
+ * Games are replicated between the players' browsers over WebRTC (see
+ * docs/P2P_DESIGN.md): every tab keeps a full replica in localStorage, one
+ * peer per game (the authority) orders the writes, and the others propose
+ * theirs to it. The engine lives in ./sync.ts (one game) and ./node.ts (one
+ * tab); this module exposes the browser tab's node.
+ *
+ * Importing this module has no side effect: the node, its transport (Trystero,
+ * or BroadcastChannel with `?net=local`) and its storage are created on first
+ * use in the browser. During the static pre-render (no window) every function
+ * is inert.
  */
 import { cloneDeep } from "lodash";
-import IGameState, { cleanState, fillEmptyValues, IPlayer, rebuildGame } from "~/lib/state";
+import IGameState, { IPlayer } from "~/lib/state";
+import { createBrowserNode } from "./browser";
+import { NetworkNode } from "./node";
+import { ConnectionInfo, PublicGame, RecentGame, Rejection } from "./types";
 
-/**
- * local      - pass & play / tutorial game: never touches the network.
- * connecting - joining the signaling relays, no peer seen yet.
- * alone      - signaling works but no other peer is in the room right now.
- * connected  - at least one peer connected over WebRTC.
- * offline    - the browser is offline or every signaling relay failed.
- */
-export type ConnectionStatus = "local" | "connecting" | "alone" | "connected" | "offline";
+export type {
+  ConnectionInfo,
+  ConnectionStatus,
+  PeerInfo,
+  PublicGame,
+  RecentGame,
+  Rejection,
+  RejectionReason,
+} from "./types";
 
-export interface PeerInfo {
-  /** Transport-level peer id (changes on every page load). */
-  peerId: string;
-  /** Player id announced by the peer (see ~/lib/playerId); null until its hello arrives. */
-  playerId: string | null;
-}
+let browserNode: NetworkNode | null = null;
 
-export interface ConnectionInfo {
-  gameId: string;
-  status: ConnectionStatus;
-  /** Peers currently connected to this tab for this game. */
-  peers: PeerInfo[];
-  /**
-   * This tab currently orders updates for the game (and therefore must run the
-   * bots' turns). Always true for local games and when alone.
-   */
-  isAuthority: boolean;
-  /** A replica of the game exists in this tab (local copy or received from a peer). */
-  hasState: boolean;
-  /** Human-readable problem worth surfacing (e.g. a peer runs an incompatible app version). */
-  error: string | null;
-}
-
-/** Lobby-stage public game, as listed on the "Join a room" page. */
-export interface PublicGame {
-  id: string;
-  playersNames: string[];
-  playersCount: number;
-  variant: string;
-  createdAt: number;
-}
-
-/** A game this browser holds a replica of (for "resume" lists). */
-export interface RecentGame {
-  id: string;
-  status: IGameState["status"];
-  playersNames: string[];
-  updatedAt: number;
-}
-
-interface StoredReplica {
-  version: number;
-  updatedAt: number;
-  game: Partial<IGameState>;
-}
-
-const REPLICA_PREFIX = "hanab.game.";
-const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("hanab-local-sync") : null;
-const gameListeners = new Map<string, Set<(game: IGameState) => void>>();
-const connectionListeners = new Map<string, Set<(info: ConnectionInfo) => void>>();
-
-function readReplica(gameId: string): StoredReplica | null {
-  try {
-    const raw = localStorage.getItem(REPLICA_PREFIX + gameId);
-    return raw ? (JSON.parse(raw) as StoredReplica) : null;
-  } catch {
+/** This tab's network node; null outside the browser. */
+export function getNetworkNode(): NetworkNode | null {
+  if (typeof window === "undefined") {
     return null;
   }
-}
-
-function writeReplica(replica: StoredReplica) {
-  try {
-    localStorage.setItem(REPLICA_PREFIX + replica.game.id, JSON.stringify(replica));
-  } catch (e) {
-    console.warn("[network] could not persist game replica", e);
+  if (!browserNode) {
+    browserNode = createBrowserNode();
   }
+  return browserNode;
 }
-
-function materialize(stored: Partial<IGameState>): IGameState {
-  return rebuildGame(fillEmptyValues(cloneDeep(stored) as IGameState));
-}
-
-function emit(gameId: string) {
-  const replica = readReplica(gameId);
-  if (!replica) return;
-  gameListeners.get(gameId)?.forEach((listener) => listener({ ...materialize(replica.game), synced: true }));
-}
-
-channel?.addEventListener("message", (event: MessageEvent<{ gameId: string }>) => emit(event.data.gameId));
 
 /**
  * Resolve the game: immediately from this browser's replica when there is one,
@@ -111,23 +53,21 @@ channel?.addEventListener("message", (event: MessageEvent<{ gameId: string }>) =
  * rather than treat the game as nonexistent, since peers may join later.
  */
 export async function loadGame(gameId: string, options: { timeoutMs?: number } = {}): Promise<IGameState | null> {
-  void options;
-  const replica = readReplica(gameId);
-  return replica ? materialize(replica.game) : null;
+  const node = getNetworkNode();
+  return node ? node.loadGame(gameId, options) : null;
 }
 
 /**
  * Join the game's room (reference-counted across subscribers) and call
  * `callback` with the current state and after every change, local or remote.
- * States are rebuilt (rebuildGame) and passed with `synced: true`.
- * Returns an unsubscribe function; the room is left when the last subscriber goes.
+ * States are rebuilt (rebuildGame) and passed with `synced: true`; each call
+ * gets its own copy. Returns an unsubscribe function; the room is left a few
+ * seconds after the last subscriber goes (so remounts and route changes
+ * don't reconnect).
  */
 export function subscribeToGame(gameId: string, callback: (game: IGameState) => void): () => void {
-  const listeners = gameListeners.get(gameId) ?? new Set();
-  listeners.add(callback);
-  gameListeners.set(gameId, listeners);
-  queueMicrotask(() => emit(gameId));
-  return () => listeners.delete(callback);
+  const node = getNetworkNode();
+  return node ? node.subscribeToGame(gameId, callback) : () => undefined;
 }
 
 /**
@@ -135,39 +75,42 @@ export function subscribeToGame(gameId: string, callback: (game: IGameState) => 
  * concurrent changes such as lobby joins and chat messages) and broadcasts
  * the result, which reaches subscribers -- including this tab -- through
  * subscribeToGame. Works for games not joined yet: the new-game page creates
- * the game here before navigating to it. Resolves once the proposal is
+ * the game here before navigating to it (it becomes this browser's replica,
+ * version 1, and this tab its first authority). Resolves once the proposal is
  * applied locally (authority) or handed to the transport (non-authority).
+ *
+ * The write is relative to the state this tab last delivered: only what
+ * `game` changes compared to it is applied. When the authority refuses it
+ * (e.g. the turn already moved on), this tab's subscribers immediately get
+ * the authoritative state again and subscribeToRejections is notified.
  */
 export async function updateGame(game: IGameState): Promise<void> {
+  const node = getNetworkNode();
+  if (!node) return;
+  // Debugging convenience kept from the previous backends: the last written game.
   window["hanab"] = cloneDeep(game);
-  const previous = readReplica(game.id);
-  writeReplica({ version: (previous?.version ?? 0) + 1, updatedAt: Date.now(), game: cleanState(game) });
-  emit(game.id);
-  channel?.postMessage({ gameId: game.id });
+  await node.updateGame(game);
 }
 
 /** Set (or clear with null) a player's emoji reaction. Never lost to concurrent updates. */
 export async function setReaction(game: IGameState, player: IPlayer, reaction: string | null): Promise<void> {
-  const players = game.players.map((p) => (p.id === player.id ? { ...p, reaction } : p));
-  await updateGame({ ...game, players });
+  const node = getNetworkNode();
+  if (node) await node.setPlayerField(game, player, "reaction", reaction);
 }
 
 /** Mark a player as notified (the "ring the bell" nudge). Never lost to concurrent updates. */
 export async function setNotification(game: IGameState, player: IPlayer, notified: boolean): Promise<void> {
-  const players = game.players.map((p) => (p.id === player.id ? { ...p, notified } : p));
-  await updateGame({ ...game, players });
+  const node = getNetworkNode();
+  if (node) await node.setPlayerField(game, player, "notified", notified);
 }
 
 /** Snapshot of this tab's connection to the game's room. */
 export function getConnection(gameId: string): ConnectionInfo {
-  return {
-    gameId,
-    status: "local",
-    peers: [],
-    isAuthority: true,
-    hasState: readReplica(gameId) !== null,
-    error: null,
-  };
+  const node = getNetworkNode();
+  if (node) {
+    return node.getConnection(gameId);
+  }
+  return { gameId, status: "connecting", peers: [], isAuthority: false, hasState: false, error: null };
 }
 
 /** Whether this tab should order updates and play the bots' turns for the game. */
@@ -175,39 +118,45 @@ export function isAuthority(gameId: string): boolean {
   return getConnection(gameId).isAuthority;
 }
 
-/** Call `callback` now and whenever the connection to the game's room changes. */
+/**
+ * Call `callback` now and whenever the connection to the game's room changes.
+ * Holds the room like subscribeToGame does.
+ */
 export function subscribeToConnection(gameId: string, callback: (info: ConnectionInfo) => void): () => void {
-  const listeners = connectionListeners.get(gameId) ?? new Set();
-  listeners.add(callback);
-  connectionListeners.set(gameId, listeners);
-  queueMicrotask(() => callback(getConnection(gameId)));
-  return () => listeners.delete(callback);
+  const node = getNetworkNode();
+  return node ? node.subscribeToConnection(gameId, callback) : () => undefined;
 }
 
-/** Public games in their lobby, announced by peers. Calls back with the full current list on every change. */
+/**
+ * Call `callback` whenever the authority refuses one of this tab's writes to
+ * the game: `reason` is "turn-conflict" when the turn had already moved on
+ * (another move, or a rollback, got there first), "game-full" or
+ * "game-started" for a join that came too late, "invalid" for a write that
+ * could not be applied. By the time it is called, subscribeToGame has already
+ * delivered the authoritative state; use it to tell the player (a toast).
+ * Does not join the room by itself.
+ */
+export function subscribeToRejections(gameId: string, callback: (rejection: Rejection) => void): () => void {
+  const node = getNetworkNode();
+  return node ? node.subscribeToRejections(gameId, callback) : () => undefined;
+}
+
+/**
+ * Public games in their lobby, announced by peers. Calls back with the full
+ * current list now and on every change (entries expire ~30s after their last
+ * announcement).
+ */
 export function subscribeToPublicGames(callback: (games: PublicGame[]) => void): () => void {
-  queueMicrotask(() => callback([]));
-  return () => undefined;
+  const node = getNetworkNode();
+  if (!node) {
+    queueMicrotask(() => callback([]));
+    return () => undefined;
+  }
+  return node.subscribeToPublicGames(callback);
 }
 
 /** Games this browser holds a replica of, most recently updated first. */
 export function listRecentGames(): RecentGame[] {
-  const games: RecentGame[] = [];
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key?.startsWith(REPLICA_PREFIX)) continue;
-      const replica = readReplica(key.slice(REPLICA_PREFIX.length));
-      if (!replica?.game?.id) continue;
-      games.push({
-        id: replica.game.id,
-        status: replica.game.status,
-        playersNames: (replica.game.players ?? []).map((p) => p.name),
-        updatedAt: replica.updatedAt,
-      });
-    }
-  } catch {
-    return [];
-  }
-  return games.sort((a, b) => b.updatedAt - a.updatedAt);
+  const node = getNetworkNode();
+  return node ? node.listRecentGames() : [];
 }

@@ -6,7 +6,7 @@
     "dev": "cross-env NODE_OPTIONS='--openssl-legacy-provider' next dev",
     "build": "cross-env NODE_OPTIONS='--openssl-legacy-provider' next build",
     "lint": "eslint '**/*.{ts,tsx}'",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "serve:static": "node scripts/serve-static.mjs"
   },
   "dependencies": {
