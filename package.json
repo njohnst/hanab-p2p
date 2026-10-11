@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "cross-env NODE_OPTIONS='--openssl-legacy-provider' next dev",
     "build": "cross-env NODE_OPTIONS='--openssl-legacy-provider' next build",
-    "lint": "eslint '**/*.{ts,tsx}'",
+    "lint": "eslint \"**/*.{ts,tsx}\"",
     "test": "vitest run",
     "serve:static": "node scripts/serve-static.mjs"
   },
@@ -65,7 +65,10 @@
     "vite": "6.4.4",
     "vitest": "4.1.11"
   },
+  "resolutions": {
+    "vite": "6.4.4"
+  },
   "engines": {
-    "node": ">=18.17"
+    "node": ">=20"
   }
 }

@@ -26,6 +26,12 @@ export const fr = {
   share: "Partager",
   scanToJoin: "Scanne ce code avec l'appareil photo d'un téléphone pour rejoindre",
   invitePlayers: "Inviter des joueurs",
+  connectingToGame: "Connexion à la partie…",
+  waitingForGameShare: "En attente d'un autre joueur pour la partager…",
+  waitingForGameShareLong:
+    "Personne ne t'a encore transmis cette partie. Garde cette page ouverte : elle se chargera dès qu'un autre joueur qui l'a sera en ligne.",
+  connectedPeers: "{{count}} joueur connecté",
+  connectedPeers_plural: "{{count}} joueurs connectés",
   waitForOthers: "Tu peux attendre les autres ou ",
   gameStarted: "Début de la partie",
   gameStarts: "Début de la partie",

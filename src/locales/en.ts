@@ -32,6 +32,12 @@ export const en = {
   share: "Share",
   scanToJoin: "Scan this code with a phone camera to join",
   invitePlayers: "Invite players",
+  connectingToGame: "Connecting to the game…",
+  waitingForGameShare: "Waiting for another player to share it…",
+  waitingForGameShareLong:
+    "No one has shared this game with you yet. Keep this page open: it will load as soon as another player who has it is online.",
+  connectedPeers: "{{count}} player connected",
+  connectedPeers_plural: "{{count}} players connected",
   waitForOthers: "Wait for others, or ",
   gameStarted: "Game started!",
   gameStarts: "Game starts!",

@@ -28,7 +28,10 @@ jobs:
       - name: Build static site
         # Project sites live under /<repo>/; user/org sites (<owner>.github.io) at the root.
         run: |
-          if [ "${{ github.event.repository.name }}" = "${{ github.repository_owner }}.github.io" ]; then
+          repo="${{ github.event.repository.name }}"
+          owner="${{ github.repository_owner }}"
+          # GitHub names are case-insensitive: "NickJ" can publish its user site from "nickj.github.io".
+          if [ "${repo,,}" = "${owner,,}.github.io" ]; then
             export NEXT_PUBLIC_BASE_PATH=""
           else
             export NEXT_PUBLIC_BASE_PATH="/${{ github.event.repository.name }}"
