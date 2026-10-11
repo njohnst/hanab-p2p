@@ -3,11 +3,12 @@ import Head from "next/head";
 import Link from "next/link";
 import React, { FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import ShareGame from "~/components/shareGame";
 import Button from "~/components/ui/button";
 import { Checkbox, Field, TextInput } from "~/components/ui/forms";
 import Txt, { TxtSize } from "~/components/ui/txt";
 import { useGame, useSelfPlayer } from "~/hooks/game";
-import { absoluteGameUrl, learnUrl } from "~/lib/routes";
+import { learnUrl } from "~/lib/routes";
 import { GameMode, IPlayer } from "~/lib/state";
 
 function listPlayerNames(players: IPlayer[]) {
@@ -60,20 +61,10 @@ export default function Lobby(props: Props) {
   const selfPlayer = useSelfPlayer(game);
   const [name, setName] = useState("");
   const [bot, setBot] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const gameFull = game.players.length === game.options.playersCount;
   const canJoin = (game.options.gameMode === GameMode.PASS_AND_PLAY || !selfPlayer) && !gameFull;
   const canStart = gameFull;
-
-  const shareLink = absoluteGameUrl(game.id);
-  const inputRef = React.createRef<HTMLInputElement>();
-  function copy() {
-    inputRef.current.select();
-    document.execCommand("copy");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
 
   useEffect(() => {
     if (game.options.gameMode === GameMode.PASS_AND_PLAY && game.players.length > 0) {
@@ -94,14 +85,6 @@ export default function Lobby(props: Props) {
 
   return (
     <div className="flex items-center justify-center h-100 w-100 pa2">
-      {copied && (
-        <div
-          className="fixed z-999 bg-white black ph3 pv2 br2 shadow-2 f6 fw5"
-          style={{ top: "1rem", left: "50%", transform: "translateX(-50%)" }}
-        >
-          {t("copied")}
-        </div>
-      )}
       <Meta />
       <div className="flex flex-column pa2 w-100 h-100">
         <div className="mb3 ttu flex items-center">
@@ -181,17 +164,8 @@ export default function Lobby(props: Props) {
             </div>
           </form>
         )}
-        {!gameFull && !game.options.tutorial && (
-          <div className="flex mt4">
-            <div className="flex flex-column mr2">
-              <Txt className="mb1" value={t("shareGame")} />
-              <a className="lavender flex-1" href={shareLink} rel="noopener noreferrer" target="_blank">
-                <Txt value={shareLink} />
-              </a>
-            </div>
-            <input ref={inputRef} readOnly className="fixed top--2 left--2" type="text" value={shareLink} />
-            <Button outlined text={t("copy")} onClick={copy} />
-          </div>
+        {!gameFull && !game.options.tutorial && game.options.gameMode === GameMode.NETWORK && (
+          <ShareGame className="mt4" gameId={game.id} />
         )}
       </div>
     </div>

@@ -418,3 +418,15 @@ button {
     zoom: 1.3
   }
 }
+
+/* QR code invite (components/shareGame.tsx): white quiet zone keeps it scannable on the dark theme */
+.share-qr {
+  width: 180px;
+  height: 180px;
+}
+
+.share-qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

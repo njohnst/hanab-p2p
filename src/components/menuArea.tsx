@@ -3,13 +3,16 @@ import React, { useContext, useState } from "react";
 import { useTranslation } from "react-i18next";
 import LanguageSelector from "~/components/languageSelector";
 import Rules from "~/components/rules";
+import ShareGame from "~/components/shareGame";
 import { TutorialContext } from "~/components/tutorial";
 import Button, { ButtonSize } from "~/components/ui/button";
 import { Modal } from "~/components/ui/modal";
 import Txt, { TxtSize } from "~/components/ui/txt";
 import UserPreferencesDialog from "~/components/userPreferencesDialog";
+import { useGame } from "~/hooks/game";
 import { UserPreferences, useUserPreferences } from "~/hooks/userPreferences";
 import { logFailedPromise } from "~/lib/errors";
+import { GameMode } from "~/lib/state";
 
 interface Props {
   onCloseArea: () => void;
@@ -19,6 +22,9 @@ export default function MenuArea(props: Props) {
   const { onCloseArea } = props;
 
   const [showRules, setShowRules] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const game = useGame();
+  const canInvite = game?.options.gameMode === GameMode.NETWORK && !game.options.tutorial;
   const { reset } = useContext(TutorialContext);
   const router = useRouter();
   const { t } = useTranslation();
@@ -54,13 +60,22 @@ export default function MenuArea(props: Props) {
   return (
     <Modal isOpen onRequestClose={() => onCloseArea()}>
       <div className={`flex flex-column justify-center items-center w-100 h-100 z-10 ${showRules ? "" : "pa2"}`}>
-        {!showRules && (
+        {!showRules && !showInvite && (
           <div className="flex flex-column justify-center items-center">
             <Txt className="ttu txt-yellow mb4 mb5-l" size={TxtSize.MEDIUM} value={t("hanab")} />
 
             <div className="mb4 mb5-l">
               <LanguageSelector />
             </div>
+            {canInvite && (
+              <Button
+                primary
+                className="mb3 w-100"
+                size={ButtonSize.MEDIUM}
+                text={t("invitePlayers")}
+                onClick={() => setShowInvite(true)}
+              />
+            )}
             <Button className="mb3 w-100" size={ButtonSize.MEDIUM} text={t("userPreferences")} onClick={onPrefClick} />
             <Button className="mb3 w-100" size={ButtonSize.MEDIUM} text={t("menu")} onClick={onMenuClick} />
             <Button className="mb3 w-100" size={ButtonSize.MEDIUM} text={t("tutorial")} onClick={onTutorialClick} />
@@ -70,6 +85,13 @@ export default function MenuArea(props: Props) {
               text={t("rules")}
               onClick={() => setShowRules(true)}
             />
+          </div>
+        )}
+
+        {showInvite && (
+          <div className="flex flex-column items-center pv3">
+            <ShareGame gameId={game.id} />
+            <Button className="mt4" size={ButtonSize.SMALL} text={t("back")} onClick={() => setShowInvite(false)} />
           </div>
         )}
 
