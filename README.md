@@ -1,202 +1,188 @@
-# Hanab.cards
+# Hanab, peer-to-peer
 
-Hanab is a cooperative card game inspired by, but unaffiliated with, a game made by French designer Antoine Bauza published in 2010 by Asmodée Éditions.
+Play Hanab with friends straight from the browser: no accounts, no game server. Create a room, share
+the link or let your friends scan its QR code, and the players' browsers connect to each other over
+WebRTC.
 
-Like us, please buy the [physical version](https://fr.asmodee.com/fr/games/hanabi/products/hanabi/) to support its creator if you like this game!
+This is a fork of [bstnfrmry/hanabi](https://github.com/bstnfrmry/hanabi), the code behind
+[hanab.cards](https://hanab.cards), by Bastien Formery and its contributors. The game, the bots, the
+variants, the tutorial and the whole interface are theirs. This fork replaces the Firebase backend with
+peer-to-peer sync, so the app is a static site you can host for free, for example on GitHub Pages.
 
-If you enjoy our app, you can also [buy us a coffee](https://www.buymeacoffee.com/hanabicards) ☕️!
+Hanab is a cooperative card game inspired by, but unaffiliated with, a game made by French designer
+Antoine Bauza published in 2010 by Asmodée Éditions. If you like it, please buy the
+[physical version](https://fr.asmodee.com/fr/games/hanabi/products/hanabi/) to support its creator.
+You can also [buy the hanab.cards authors a coffee](https://www.buymeacoffee.com/hanabicards) ☕️.
 
-<a href="https://www.buymeacoffee.com/hanabicards" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-blue.png" alt="Buy Us A Coffee" height="34px" ></a>
+## How it works
 
+- **Static site.** `yarn build` produces plain files in `out/`, with no server-side code.
+- **WebRTC between players.** Each game is a room found through public
+  [Nostr](https://nostr.com) relays via [Trystero](https://github.com/dmotz/trystero). The relays only
+  help browsers find each other; game data then flows directly between players. Signaling is encrypted
+  with the room name. Connections use public STUN servers, and an optional TURN relay can be configured
+  (see [TURN](#optional-turn-relay)).
+- **Every player keeps a copy of the game** in their browser (localStorage, the 50 most recent games).
+  One player's browser coordinates: it puts moves in order and plays the bots' turns. If that player
+  leaves, another one takes over, so the game survives anyone closing a tab or a phone going to sleep.
+  Changes made at the same moment, such as two people joining the lobby or chatting, are merged instead
+  of overwriting each other.
+- **Pass & play and the tutorial never go online.**
 
-## Contribute
+The full design is in [docs/P2P_DESIGN.md](docs/P2P_DESIGN.md).
 
-We are so happy to see people join the project and contribute to the repository. Do not hesitate to add an issue or open a pull request.
+### Things to know
 
-Thanks to all the people who contributed!
+- **Playing online needs a secure page**: https, or `localhost` during development. A phone opening the
+  dev server at `http://192.168.x.x:3000` cannot connect; use the deployed site or an https tunnel.
+- **Some networks block direct connections.** Players behind strict NATs or corporate firewalls need a
+  TURN relay.
+- **Anyone with the link can join** the room, and every player's browser holds the whole game (as with
+  upstream, where every client could read the Firebase document). Someone determined could peek at
+  their own hand in the developer tools. It's a cooperative game for friends.
+- **A game exists only in its players' browsers.** If nobody who has it is online, newcomers wait until
+  someone who has it comes back.
 
-<a href="https://github.com/bstnfrmry/hanabi/graphs/contributors">
-  <img src="https://contributors-img.web.app/image?repo=bstnfrmry/hanabi" />
-</a>
+## Playing
 
-### Issues
+1. **Create a room**, pick the number of players and the variant.
+2. **Invite**: the lobby shows the game link, a QR code, a Copy button and, where the browser can share
+   (most phones, some desktop browsers), a Share button. The ☰ menu has an **Invite players** entry with
+   the same QR code during the game too, though anyone joining after the start can only watch.
+3. Fill empty seats with AI players if you like, then start.
 
-Open an issue everything you want to report
-- an improvement
-- a missing feature you would like to see in the app
-- a bug
+Your seat belongs to the browser you joined from: opening the link on another device lets you watch, not
+play your hand.
 
-Do not hesitate to give us context on what you were trying to achieve, what page you were on, what user story, etc.
+**Join a room** lists public rooms while their hosts wait in the lobby. Private rooms are only
+reachable through their link.
 
-### Code
+## Development
 
-##### Frameworks
-
-The project uses the [Next.JS](https://nextjs.org/) React framework with Typescript and [Firebase Realtime Database](https://firebase.google.com/) as a back-end.
-
-You'll need to setup a free Firebase account to test the project locally.
-
-##### <a id="setup"></a>Local setup and development
-
-1. Clone the project locally on your computer
-
-2. Execute `yarn` to install dependencies
+Requirements: Node 20 (see `.nvmrc`) and Yarn 1. If you don't have Yarn, prefix the commands with
+`npx yarn@1.22.22`.
 
 ```bash
-# Install dependencies
-$ yarn
-
-# Configure Firebase
-$ cp .env.sample .env && open .env
-
-# Launch development environment
-$ yarn dev
+yarn install
+yarn dev        # http://localhost:3000
 ```
 
-You'll probably see the following answer
-> ready - started server on http://localhost:3000
-> info  - Loaded env from .env
+### Playing several seats from one browser
 
-4. Open your browser on `http://localhost:3000`
+All tabs of a browser share one player identity. To be several players at once:
 
+- Add `?as=<name>` to a URL (e.g. `/play/?gameId=FooBarBaz&as=bob`). That tab keeps its own identity for
+  as long as it stays open.
+- Add `?net=local` to sync tabs of the same browser through BroadcastChannel instead of WebRTC, with no
+  internet needed. Every tab of the game needs it (e.g. `/play/?gameId=FooBarBaz&as=bob&net=local`):
+  invite links don't carry it. The tab remembers the choice until it closes; `?net=webrtc` switches it
+  back.
 
-### Help us translate
+### Tests, lint and the static build
 
-The game is currently available in English, French, Dutch, Spanish and Russian thanks to a handful of contributors! Thanks a lot again!
-
-We use react-i18n for translations. Documentation can be found [here](https://react.i18next.com/).
-Want to add a new language? Here is a short intro on how to proceed.
-
-#### How to add a new language
-
-First, setup the project locally and find the 2-letter language code of the new language you want to add. We use the standard [ISO 639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes). `en` for English, `es` for Spanish, `it` for Italian...
-
-**Setup**
-
-- [Fork](https://github.com/bstnfrmry/hanabi/fork) the repository
-
-- Follow the [Local setup and development](#setup) instructions
-
-**Create the translation file and translate**
-
-- Duplicate an exisiting translation file in the `locale` folder (/src/locales) and name it after the new langague you want to add. For example, `it.ts` if you want to add the Italian language.
-<br/>
-
-- Edit the language code on line 3  `export const it = {`
-
-ℹ️ How the translations are composed
-`tagline: "Play Hanab online with friends!",`
-The first element of every line is the translation name (keep it as is and do not translate it). The translation itself is located under the double-quotes.
-
-- Start translating!
-
-> For example,
-> `welcome: "Benvenuto",` // Welcome in Italian
-
-ℹ️ If you see html elements in your translation like `<1>`, you can refer to the next section for additional information.
-
-**Import the new languaage**
-
-- Import your file here [src/lib/i18n.ts](https://github.com/bstnfrmry/hanabi/tree/master/src/lib/i18n.ts) and add the new language in the i18n ressources initiatlization.
-
-``` Typescript
-(...)
-import { en } from "~/locales/en";
-import { es } from "~/locales/es";
-import { fr } from "~/locales/fr";
-import { it } from "~/locales/it"; // italian
-import { nl } from "~/locales/nl";
-import { ru } from "~/locales/ru";
-
-i18n
-  .use(initReactI18next)
-  .use(LanguageDetector)
-  .init({
-    resources: {
-      en: {
-        translation: en,
-      },
-      fr: {
-        translation: fr,
-      },
-      es: {
-        translation: es,
-      },
-      it: { // italian
-        translation: it,
-      },
+```bash
+yarn test       # vitest: merge rules, protocol, storage and sync scenarios of the network layer
+yarn lint
+yarn build      # static export in out/
+yarn serve:static   # serves out/ on http://localhost:3000
 ```
 
-**Add it to the configuration (next)**
+To reproduce a GitHub Pages project site, which lives under `/<repo>/`, build and serve with a base path:
 
-Open the [next.config.js](next.config.js) file and add the language to the list of options for the configuration.
-
-```Javascript
-
-  i18n: {
-    locales: ["en", "fr", "es", "it", "nl", "ru", "pt"],
-    defaultLocale: "en",
-  },
+```bash
+NEXT_PUBLIC_BASE_PATH=/hanabi-app yarn build
+BASE_PATH=/hanabi-app yarn serve:static   # http://localhost:3000/hanabi-app/
 ```
 
-**Add it to the selector**
+On Windows, Git Bash rewrites `/hanabi-app` into a Windows path (`C:/Program Files/Git/hanabi-app`)
+before Node sees it. Prefix both commands with `MSYS_NO_PATHCONV=1` there. In PowerShell, set the
+variables first; they stay set for the rest of the session:
 
-- Add the new language to the language selector dropdown. File `src/components/languageSelector.tsx`
-
-```Typescript
-const Languages = {
-  en: "English",
-  fr: "Français",
-  es: "Español",
-  nl: "Dutch",
-  ru: "Russian",
-  it: "Italian" // italian
-};
+```powershell
+$env:NEXT_PUBLIC_BASE_PATH = "/hanabi-app"; yarn build
+$env:BASE_PATH = "/hanabi-app"; yarn serve:static
+Remove-Item Env:NEXT_PUBLIC_BASE_PATH, Env:BASE_PATH   # back to normal builds
 ```
 
-- Commit your code and open a pull request with your changes on Github.
+### Where things are
 
+| Path | What |
+|------|------|
+| `src/lib/actions.ts`, `src/lib/ai.ts` | Game rules and bots (from upstream) |
+| `src/lib/network/` | Peer-to-peer sync: transports, the coordinating peer, merging, storage, public lobby |
+| `src/lib/routes.ts` | Every in-app URL (games live at `/play/?gameId=…`) |
+| `src/lib/playerId.ts` | Player identity (replaces upstream's server session) |
+| `src/components/shareGame.tsx` | Invite panel with the QR code |
+| `.github/workflows/deploy.yml` | GitHub Pages deployment |
 
+## Deploying to GitHub Pages
 
-**Some advice**
-If you started some work and did not have time to finish, do not hesitate to open a pull request labelling it as WIP (work in progress). It will help us know someone is currently working on the project so as to let them know if a new feature has been added (with new translations) or to help them continue translating directly on the open branch.
+1. Push the repository to GitHub, with `main` or `master` as the default branch.
+2. In **Settings → Pages**, set **Source** to **GitHub Actions**.
+3. Push to the default branch, or run the **Deploy to GitHub Pages** workflow manually. It runs the
+   tests, builds with the base path `/<repo>` (or none for a `<owner>.github.io` repository) and
+   publishes `out/`.
+
+Using a custom domain on a project site? The site is then served from the root: change the workflow so
+it builds with an empty `NEXT_PUBLIC_BASE_PATH`.
+
+Any other static host works too: build with the base path the site will live under, then upload `out/`.
+
+### Optional TURN relay
+
+To help players on restrictive networks, point the app at a TURN server when building:
+
+| Variable | Meaning |
+|----------|---------|
+| `NEXT_PUBLIC_TURN_URLS` | Comma-separated TURN URLs, e.g. `turn:turn.example.com:3478` |
+| `NEXT_PUBLIC_TURN_USERNAME` | TURN username |
+| `NEXT_PUBLIC_TURN_CREDENTIAL` | TURN password |
+
+The deploy workflow reads them from the repository variables `TURN_URLS` and `TURN_USERNAME` and the
+secret `TURN_CREDENTIAL`. **These values are compiled into the public JavaScript**, so anyone can read
+them, even when stored as a GitHub secret. Use a TURN service whose credentials are restricted or
+usage-limited.
+
+## Translations
+
+The game is available in English, French, Spanish, Italian, Dutch, Russian, Portuguese, German, Slovak
+and Chinese thanks to upstream's contributors. Screens added by this fork (the invite panel and the
+"connecting to the game" screen) exist in English and French; other languages show them in English until
+translated. Network error messages are English only.
+
+### Adding a language
+
+1. Duplicate `src/locales/en.ts` (the only file with every key) and name it after the language's
+   [ISO 639-1 code](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes), e.g. `pl.ts`, then rename
+   the exported constant (`export const pl = {`).
+2. Translate the values. The first element of each line is the key: keep it as is and translate only the
+   text in quotes.
+3. Register it in `src/lib/i18n.ts` (import it and add it to `resources`).
+4. Add it to `Languages` in `src/components/languageSelector.tsx`.
+
+The language comes from the player's choice in the selector, saved in the browser, otherwise from the
+browser's language.
 
 #### HTML elements in translations
 
-- Text under double brackets refer to variables. Do not translate them.
-
-> discardPile: "discard ({{ discardLength }})",
-
-ℹ️ The following `discardPile` translation will be displayed as `discard (13)` in English when 13 cards are in the discard pile.
-
-- `<1>...</1>` or `<0>...</0>` are HTML elements. Usually, they are used to apply some transformation on the encapsuled expression (like color, font weight, text decoration, etc.) or enclose objects.
+- Text in double braces is a variable: don't translate it. `discardPile: "discard ({{ discardLength }})"`
+  shows `discard (13)` when 13 cards are discarded.
+- `<1>...</1>` or `<0>...</0>` wrap part of the text (for a color, a link, a style). Translate the text
+  inside and keep the tags.
 
 #### Pluralization
 
-- Plurals are handled by the suffix "_plural" in most languages
+Plurals use the `_plural` suffix, triggered by a variable named `count`:
 
-The variable that will trigger the plural or singular is always named `count`.
-
-For example
-```  Typescript
-  turnsLeftDisclaimer: "· 1 turn left",
-  turnsLeftDisclaimer_plural: "· {{count}} turns left", // 2 turns left
-```
-`count` does not have to be in the translation itself. It can be used only to trigger or not the plural. For example :
-```  Typescript
-  // in the code file
-  t("red", { count: hintableCards.length }),
-
-  // in the translation file, for ex fr.ts rouge = red
-  red: "rouge"
-  red_plural: "rouges" // as you can see, count is not in the translation itself
+```ts
+turnsLeftDisclaimer: "· 1 turn left",
+turnsLeftDisclaimer_plural: "· {{count}} turns left",
 ```
 
-- Some languages have different plural rules. For example, in English, 0 is plural whereas it is singular in French. The suffix "_plural" will automatically handle it.
+`count` doesn't have to appear in the text itself; it can just pick singular or plural. Some languages,
+such as Russian or Arabic, have more plural forms: see the
+[suffixes they use](https://jsfiddle.net/sm9wgLze).
 
-- Yet some languages like Russian or Arabic have more complex plurals. You can use this site https://jsfiddle.net/sm9wgLze to know what suffix you can use.
+## License
 
-
-#### Need to modify the code?
-
-If your language requires adapting the code or splitting a translation and you do not know how to implement these modifications, do not hesitate to ask for help on [Github](https://github.com/bstnfrmry/hanabi/issues/) or [Discord](https://discord.gg/QEWtYdW).
+MIT, see [licence](licence). Copyright (c) 2020 Bastien Formery. This fork keeps upstream's license.
