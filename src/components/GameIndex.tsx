@@ -2,6 +2,7 @@ import dynamic from "next/dynamic";
 import React, { useEffect, useState } from "react";
 import { Game } from "~/components/game";
 import WaitingForGame from "~/components/waitingForGame";
+import { ConnectionContext } from "~/hooks/connection";
 import { GameContext } from "~/hooks/game";
 import { loadUserPreferences, UserPreferencesContext } from "~/hooks/userPreferences";
 import { logFailedPromise } from "~/lib/errors";
@@ -61,9 +62,11 @@ function SsrFreeGameIndex(props: Props) {
 
   return (
     <GameContext.Provider value={game}>
-      <UserPreferencesContext.Provider value={[userPreferences, setUserPreferences]}>
-        <Game onGameChange={setGame} />
-      </UserPreferencesContext.Provider>
+      <ConnectionContext.Provider value={connection}>
+        <UserPreferencesContext.Provider value={[userPreferences, setUserPreferences]}>
+          <Game onGameChange={setGame} />
+        </UserPreferencesContext.Provider>
+      </ConnectionContext.Provider>
     </GameContext.Provider>
   );
 }

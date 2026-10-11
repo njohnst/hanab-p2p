@@ -1,6 +1,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { CardWrapper } from "~/components/card";
+import ConnectionIndicator from "~/components/connectionIndicator";
 import HomeButton from "~/components/homeButton";
 import PlayedCards from "~/components/playedCards";
 import TokenSpace from "~/components/tokenSpace";
@@ -39,7 +40,8 @@ export default function GameBoard(props: Props) {
             <Txt uppercase className="red ml2" value={t("turnsLeftDisclaimer", { count: game.actionsLeft })} />
           )}
         </div>
-        <div className="flex">
+        <div className="flex items-center">
+          <ConnectionIndicator />
           {game.options.allowRollback && selfPlayer && onRollbackClick && (
             <Button
               void
