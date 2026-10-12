@@ -54,8 +54,12 @@ The full design is in [docs/P2P_DESIGN.md](docs/P2P_DESIGN.md).
 Your seat belongs to the browser you joined from: opening the link on another device lets you watch, not
 play your hand.
 
-**Join a room** lists public rooms while their hosts wait in the lobby. Private rooms are only
-reachable through their link.
+**Join a room** takes a room name (like `ExcitingHookwormPink`) or a pasted game link, and lists public
+rooms while their players wait in the lobby. Private rooms aren't listed: join them by name or link.
+
+The home page lists the games you're in, so you can get back to them. If the host's action wins a race
+with yours (two people taking the last seat, a move after the turn has passed), you'll see a short
+message saying why yours wasn't applied.
 
 ## Development
 
