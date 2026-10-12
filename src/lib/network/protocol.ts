@@ -88,6 +88,20 @@ export interface RejectMessage {
   reason: string;
 }
 
+/**
+ * The sender is leaving the game's room right now (its page is closed or
+ * hidden, or it stopped following the game): drop it at once instead of
+ * waiting for the transport to notice (WebRTC only notices a closed tab when
+ * the connection times out, ~25s), and elect a new authority if it was one.
+ * Peers running older code ignore it (unknown type), so it needs no protocol
+ * bump: they just notice the departure later, as before.
+ */
+export interface ByeMessage {
+  type: "bye";
+  protocol: number;
+  gameId: string;
+}
+
 /** Public-lobby announcement ("open: false" withdraws the game). */
 export interface PublicGameMessage {
   type: "public-game";
@@ -96,7 +110,7 @@ export interface PublicGameMessage {
   open: boolean;
 }
 
-export type GameMessage = HelloMessage | StateMessage | ProposeMessage | AckMessage | RejectMessage;
+export type GameMessage = HelloMessage | StateMessage | ProposeMessage | AckMessage | RejectMessage | ByeMessage;
 export type WireMessage = GameMessage | PublicGameMessage;
 
 export type ParsedMessage =
@@ -260,6 +274,8 @@ function isValid(message: Obj): boolean {
       return isId(message.gameId) && isId(message.proposalId);
     case "reject":
       return isId(message.gameId) && isId(message.proposalId) && isString(message.reason, 200);
+    case "bye":
+      return isId(message.gameId);
     case "public-game":
       return isPublicGame(message.game) && typeof message.open === "boolean";
     default:

@@ -6,7 +6,8 @@
  * JSON round-tripped like on the wire (no shared objects between peers) and
  * stay in order per link; join/leave events travel on the same ordered link.
  * Messages in flight when a peer leaves are still delivered (like Trystero,
- * which flushes before closing); a cut link loses them.
+ * which flushes before closing); a cut link loses them. The others can be
+ * made slow to notice a departure (leaveNoticeMs), like WebRTC with a closed tab.
  */
 import { JoinOptions, Transport, TransportHandlers, TransportRoom } from "./types";
 
@@ -33,6 +34,13 @@ export class MemoryNetwork {
   readonly joins: Array<{ nodeId: string; roomId: string }> = [];
   /** Return true to drop a message. */
   dropWhen: ((message: SentMessage) => boolean) | null = null;
+  /**
+   * How long the others take to notice that a node left a room. null: after
+   * the link latency, like a clean leave. WebRTC peers notice a closed tab
+   * only when the connection times out (~25s): set it to simulate that. It is
+   * not noticed at all if the node is back in the room by then.
+   */
+  leaveNoticeMs: number | null = null;
 
   private defaultLatency: number;
   private latencies = new Map<string, number>();
@@ -205,25 +213,31 @@ export class MemoryNetwork {
     });
   }
 
-  private disconnect(roomId: string, a: string, b: string) {
+  /** Tell both ends the link is gone: after the link latency, or `noticeMs` (unless reconnected by then). */
+  private disconnect(roomId: string, a: string, b: string, noticeMs: number | null = null) {
     const pairs = this.pairs(roomId);
     const key = linkKey(a, b);
     if (!pairs.has(key)) {
       return;
     }
     pairs.delete(key);
+    const epoch = this.epochs.get(key);
+    const notify = (from: string, to: string, member: Member) => {
+      const deliver = () => {
+        if (!pairs.has(key) && this.memberIfCurrent(roomId, to, member)) member.handlers.onPeerLeave(from);
+      };
+      if (noticeMs === null) {
+        this.schedule(from, to, deliver);
+      } else {
+        setTimeout(() => {
+          if (this.epochs.get(key) === epoch) deliver();
+        }, noticeMs);
+      }
+    };
     const memberA = this.memberIfCurrent(roomId, a);
     const memberB = this.memberIfCurrent(roomId, b);
-    if (memberB) {
-      this.schedule(a, b, () => {
-        if (!pairs.has(key) && this.memberIfCurrent(roomId, b, memberB)) memberB.handlers.onPeerLeave(a);
-      });
-    }
-    if (memberA) {
-      this.schedule(b, a, () => {
-        if (!pairs.has(key) && this.memberIfCurrent(roomId, a, memberA)) memberA.handlers.onPeerLeave(b);
-      });
-    }
+    if (memberB) notify(a, b, memberB);
+    if (memberA) notify(b, a, memberA);
   }
 
   private leave(roomId: string, member: Member) {
@@ -231,7 +245,9 @@ export class MemoryNetwork {
     if (!room || room.get(member.nodeId) !== member) {
       return;
     }
-    this.peersOf(roomId, member.nodeId).forEach((other) => this.disconnect(roomId, member.nodeId, other));
+    this.peersOf(roomId, member.nodeId).forEach((other) =>
+      this.disconnect(roomId, member.nodeId, other, this.leaveNoticeMs)
+    );
     room.delete(member.nodeId);
   }
 

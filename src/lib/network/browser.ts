@@ -1,9 +1,10 @@
 /**
  * The browser's network node: transport selection, ICE servers, storage and
- * the page-lifecycle hooks. Only called from the browser (never at import
- * time, never during the static pre-render).
+ * the page-lifecycle hooks (./lifecycle.ts). Only called from the browser
+ * (never at import time, never during the static pre-render).
  */
 import { getPlayerId } from "~/lib/playerId";
+import { watchPageLifecycle } from "./lifecycle";
 import { KeyValueStorage } from "./storage";
 import { NetworkNode, NetworkNodeOptions } from "./node";
 import { createBroadcastChannelTransport } from "./transports/broadcast";
@@ -85,16 +86,6 @@ export function createBrowserNode(): NetworkNode {
     timings: kind === "local" ? LOCAL_TIMINGS : undefined,
   });
 
-  const revive = () => node.revive();
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") revive();
-  });
-  window.addEventListener("online", revive);
-  window.addEventListener("offline", () => node.refresh());
-  window.addEventListener("pageshow", (event: PageTransitionEvent) => {
-    // Restored from the back/forward cache: connections are gone.
-    if (event.persisted) revive();
-  });
-
+  watchPageLifecycle(node, window, document);
   return node;
 }

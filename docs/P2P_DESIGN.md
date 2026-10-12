@@ -94,7 +94,8 @@ Every message carries `protocol` (an integer). Peers with a different `protocol`
 reported through `ConnectionInfo.error` ("someone is running a different version — reload").
 Suggested messages: `hello` (authorKey, playerId, version, isAuthority), `state` (version, authorKey,
 game), `propose` (proposalId, baseVersion, base, proposed), `reject` (proposalId, reason),
-`public-game` (lobby summary). States are a few KB, and Trystero chunks larger payloads.
+`bye` (the sender is leaving the room: drop it now), `public-game` (lobby summary). States are a few
+KB, and Trystero chunks larger payloads.
 
 ### Public rooms
 
@@ -105,8 +106,12 @@ announced.
 
 ### Connection robustness
 
-- On `visibilitychange` back to visible, or `online`, re-join or re-announce if no peers are
-  connected (mobile browsers drop WebRTC when backgrounded).
+- On `pagehide`, send `bye` and leave every room, so peers drop the tab and hand the authority over
+  at once instead of after WebRTC's ~25s timeout. `beforeunload` is not used: it also fires for
+  navigations that never happen (cancelled, `mailto:` links) and keeps Firefox from caching the page.
+- On `pageshow` from the back/forward cache, `visibilitychange` back to visible, or `online`, re-join
+  (as a follower that syncs first) or re-announce if no peers are connected (mobile browsers drop
+  WebRTC when backgrounded).
 - STUN: Trystero defaults plus `stun:stun.l.google.com:19302`. TURN from `NEXT_PUBLIC_TURN_URLS`,
   `NEXT_PUBLIC_TURN_USERNAME` and `NEXT_PUBLIC_TURN_CREDENTIAL` when set.
 - Keep at most about 50 replicas in localStorage, evicting the least recently updated.

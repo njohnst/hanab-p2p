@@ -12,6 +12,9 @@
  * - Each state carries the ids of the proposals it includes, so re-sent
  *   proposals are idempotent and writes lost in a split brain are detected
  *   and re-proposed.
+ * - A tab says `bye` before it leaves a room (the game is closed, or its page
+ *   goes away: see depart()), so the others drop it and elect a new authority
+ *   at once rather than when the transport notices (~25s for WebRTC).
  *
  * Transport messages are untrusted: they are validated (parseMessage) and no
  * handler lets an exception escape.
@@ -189,6 +192,9 @@ export class GameSync {
   private peers = new Map<string, Peer>();
   private lastHelloAt = 0;
   private protocolError: string | null = null;
+  /** The page went away (depart()): out of the room until revive(). */
+  private departed = false;
+  private resumedAt: number | null = null;
 
   private recent: StoredReplica[] = [];
   private writes = new Map<string, WriteEntry>();
@@ -347,15 +353,67 @@ export class GameSync {
     return "connecting";
   }
 
-  /** Back to visible / online: re-join the room if nobody is connected (mobile browsers drop WebRTC). */
+  /**
+   * Back to visible / online / from the back-forward cache: re-join the room
+   * left by depart(), or if nobody is connected (mobile browsers drop WebRTC).
+   */
   revive() {
     if (this.closed || this.local) return;
-    if (this.visiblePeers().length) {
+    if (this.departed) {
+      this.resume();
+    } else if (this.visiblePeers().length) {
       this.broadcastHello();
-    } else {
+    } else if (!this.justResumed()) {
       this.rejoin();
     }
     this.emitConnection();
+  }
+
+  /**
+   * The page is going away (pagehide): say goodbye and leave the room now, so
+   * that the peers drop this tab and hand the authority over at once. The
+   * subscribers stay: if the page comes back (back/forward cache, cancelled
+   * navigation), revive() joins again and syncs like a newcomer. A game only
+   * kept for its grace period is closed instead.
+   */
+  depart() {
+    if (this.closed || this.local || this.departed) return;
+    if (this.refs === 0) {
+      this.close();
+      return;
+    }
+    this.sayGoodbye();
+    this.departed = true;
+    // The others carry on without us (and may move on): come back as a
+    // follower that syncs first.
+    this.authority = false;
+    this.synced = false;
+    this.deferred = [];
+    this.noAuthoritySince = null;
+    if (this.rejoinTimer) {
+      clearTimeout(this.rejoinTimer);
+      this.rejoinTimer = null;
+    }
+    this.leaveRoom();
+    this.updateAnnouncement();
+    this.emitConnection();
+  }
+
+  private resume() {
+    this.departed = false;
+    this.resumedAt = this.ctx.now();
+    this.joinRoom();
+  }
+
+  /**
+   * The room was re-joined after a departure moments ago and is still
+   * connecting: a restored page gets both pageshow and visibilitychange, and
+   * the second must not restart the join.
+   */
+  private justResumed(): boolean {
+    return (
+      this.resumedAt !== null && !this.joinError && this.ctx.now() - this.resumedAt < this.ctx.timings.syncWindowMs
+    );
   }
 
   /** Re-evaluate the connection (e.g. the browser went offline). */
@@ -377,7 +435,7 @@ export class GameSync {
   }
 
   private joinRoom() {
-    if (this.closed || this.local) return;
+    if (this.closed || this.local || this.departed) return;
 
     const gen = ++this.joinGen;
     this.peers.clear();
@@ -446,6 +504,8 @@ export class GameSync {
     this.room = null;
     this.peers.clear();
     this.authorityPeerId = null;
+    // Reported for peers of this room only: they are gone.
+    this.protocolError = null;
     if (this.syncTimer) {
       clearTimeout(this.syncTimer);
       this.syncTimer = null;
@@ -454,7 +514,7 @@ export class GameSync {
   }
 
   private rejoin() {
-    if (this.closed || this.local) return;
+    if (this.closed || this.local || this.departed) return;
     this.leaveRoom();
     this.joinRoom();
   }
@@ -473,7 +533,7 @@ export class GameSync {
   }
 
   private tick() {
-    if (this.closed || this.local) return;
+    if (this.closed || this.local || this.departed) return;
     this.guard(() => {
       const now = this.ctx.now();
       if (this.room && this.peers.size && now - this.lastHelloAt >= this.ctx.timings.helloIntervalMs) {
@@ -497,11 +557,7 @@ export class GameSync {
 
   close() {
     if (this.closed) return;
-    if (this.broadcastScheduled && this.room && this.peers.size) {
-      // A write applied just before leaving must still reach the others.
-      const message = this.stateMessage();
-      if (message) this.send(message);
-    }
+    this.sayGoodbye();
     this.closed = true;
     [this.closeTimer, this.syncTimer, this.rejoinTimer].forEach((timer) => timer && clearTimeout(timer));
     if (this.tickTimer) clearInterval(this.tickTimer);
@@ -511,6 +567,17 @@ export class GameSync {
     this.gameListeners.clear();
     this.connectionListeners.clear();
     this.ctx.onClosed(this);
+  }
+
+  /** Before leaving the room: the last state the others may lack, then `bye`. */
+  private sayGoodbye() {
+    if (!this.room) return;
+    if (this.broadcastScheduled && this.peers.size) {
+      // A write applied just before leaving must still reach the others.
+      const message = this.stateMessage();
+      if (message) this.send(message);
+    }
+    this.send({ type: "bye", protocol: PROTOCOL, gameId: this.gameId });
   }
 
   /* ------------------------------------------------------------------ */
@@ -622,7 +689,7 @@ export class GameSync {
   }
 
   private recomputeAuthority() {
-    if (this.closed) return;
+    if (this.closed || this.departed) return;
     if (this.local) {
       this.authority = true;
       return;
@@ -696,7 +763,7 @@ export class GameSync {
   }
 
   private claim() {
-    if (this.authority || !this.replica || this.closed) return;
+    if (this.authority || !this.replica || this.closed || this.departed) return;
     this.authority = true;
     this.authorityPeerId = null;
     this.noAuthoritySince = null;
@@ -1038,6 +1105,11 @@ export class GameSync {
 
       const message = parsed.message;
       if (message.type === "public-game" || message.gameId !== this.gameId) return;
+      if (message.type === "bye") {
+        // It is leaving the room: same as the transport reporting it gone, only sooner.
+        this.onPeerLeave(peerId);
+        return;
+      }
       const peer = this.ensurePeer(peerId);
       if (peer.incompatible) return;
 

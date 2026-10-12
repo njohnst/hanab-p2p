@@ -48,6 +48,7 @@ describe("parseMessage", () => {
       },
       { type: "ack", protocol: PROTOCOL, gameId: "G", proposalId: "p" },
       { type: "reject", protocol: PROTOCOL, gameId: "G", proposalId: "p", reason: "turn-conflict" },
+      { type: "bye", protocol: PROTOCOL, gameId: "G" },
       {
         type: "public-game",
         protocol: PROTOCOL,
@@ -62,6 +63,10 @@ describe("parseMessage", () => {
     expect(parseMessage({ type: "whatever", protocol: PROTOCOL + 1 })).toEqual({
       kind: "protocol-mismatch",
       protocol: PROTOCOL + 1,
+    });
+    expect(parseMessage({ type: "bye", protocol: PROTOCOL - 1, gameId: "G" })).toEqual({
+      kind: "protocol-mismatch",
+      protocol: PROTOCOL - 1,
     });
   });
 
@@ -91,6 +96,10 @@ describe("parseMessage", () => {
       state({ game: { ...game, turnsHistory: new Array(2000).fill(game.turnsHistory[0]) } }),
       state({ padding: "x".repeat(MAX_MESSAGE_CHARS) }),
       { type: "reject", protocol: PROTOCOL, gameId: "G", proposalId: "", reason: "x" },
+      { type: "bye", protocol: PROTOCOL },
+      { type: "bye", protocol: PROTOCOL, gameId: "" },
+      { type: "bye", protocol: PROTOCOL, gameId: "G".repeat(500) },
+      { type: "bye", protocol: PROTOCOL, gameId: 42 },
       { type: "public-game", protocol: PROTOCOL, open: true, game: { id: "G" } },
     ];
     hostile.forEach((message) => {

@@ -51,6 +51,8 @@ export class PublicLobby {
   private lastAnnounceAt = 0;
   private lastEmitted: PublicGame[] | null = null;
   private disposed = false;
+  /** The page went away (depart()): out of the room until revive(). */
+  private departed = false;
 
   constructor(private readonly ctx: LobbyContext) {}
 
@@ -82,9 +84,25 @@ export class PublicLobby {
     };
   }
 
-  /** Back to visible / online: re-join when nobody is connected, and re-announce. */
+  /**
+   * The page is going away (pagehide): leave the room now. The games' syncs
+   * have already withdrawn their announcements; revive() comes back.
+   */
+  depart() {
+    if (this.disposed || this.departed) return;
+    this.departed = true;
+    this.leave();
+  }
+
+  /** Back to visible / online / from the back-forward cache: re-join when nobody is connected, and re-announce. */
   revive() {
-    if (this.disposed || !this.needed()) return;
+    if (this.disposed) return;
+    if (this.departed) {
+      this.departed = false;
+      this.update();
+      return;
+    }
+    if (!this.needed()) return;
     if (this.room && this.room.getPeers().length === 0) {
       this.leave();
     }
@@ -107,7 +125,7 @@ export class PublicLobby {
   }
 
   private update() {
-    if (this.disposed) return;
+    if (this.disposed || this.departed) return;
     if (this.needed()) {
       if (this.leaveTimer) {
         clearTimeout(this.leaveTimer);

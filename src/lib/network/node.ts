@@ -315,10 +315,30 @@ export class NetworkNode {
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
-  /** Back to visible / online: re-join rooms where nobody is connected. */
+  /**
+   * Back to visible / online / from the back-forward cache: re-join the rooms
+   * left by depart(), and those where nobody is connected.
+   */
   revive() {
     this.syncs.forEach((sync) => sync.revive());
     this.lobby.revive();
+  }
+
+  /**
+   * The page is going away (pagehide, see ./lifecycle.ts): leave every room
+   * now, saying goodbye, so that the peers drop this tab and elect a new
+   * authority at once instead of when WebRTC notices (~25s). Subscriptions
+   * stay; revive() joins again if the page comes back. Idempotent.
+   */
+  depart() {
+    Array.from(this.syncs.values()).forEach((sync) => {
+      try {
+        sync.depart();
+      } catch (e) {
+        console.warn(`[network] could not leave the room of ${sync.gameId}`, e);
+      }
+    });
+    this.lobby.depart();
   }
 
   /** Re-evaluate connection statuses (e.g. the browser went offline). */
