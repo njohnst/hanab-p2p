@@ -13,37 +13,54 @@
  * tab); this module exposes the browser tab's node.
  *
  * Importing this module has no side effect: the node, its transport (Trystero,
- * or BroadcastChannel with `?net=local`) and its storage are created on first
- * use in the browser. During the static pre-render (no window) every function
- * is inert.
+ * BroadcastChannel with `?net=local`, or nearby links with `?net=nearby` and
+ * pages under /nearby/) and its storage are created on first use in the
+ * browser. During the static pre-render (no window) every function is inert.
+ *
+ * Nearby play (docs/P2P_DESIGN.md, "Nearby play (no internet)") adds, at the
+ * end of this module: getNetworkMode, getNearby (invites and replies as QR
+ * codes, and the links they make), parseNearbyText, deliverReplyToOtherTab
+ * and isNearbyGame.
  */
 import { cloneDeep } from "lodash";
 import IGameState, { IPlayer } from "~/lib/state";
-import { createBrowserNode } from "./browser";
+import { BrowserNetwork, createBrowserNetwork, selectTransportKind } from "./browser";
+import { isRememberedNearbyGame } from "./nearby/games";
+import { deliverReplyToOtherTab as deliverReply } from "./nearby/links";
+import { NearbyApi } from "./nearby/types";
 import { NetworkNode } from "./node";
-import { ConnectionInfo, PublicGame, RecentGame, Rejection } from "./types";
+import { ConnectionInfo, NetworkMode, PublicGame, RecentGame, Rejection } from "./types";
 
 export type {
   ConnectionInfo,
   ConnectionStatus,
+  NetworkMode,
   PeerInfo,
   PublicGame,
   RecentGame,
   Rejection,
   RejectionReason,
 } from "./types";
+export type { NearbyApi, NearbyCode, NearbyErrorReason, NearbyInvite, NearbyLink, NearbyReply } from "./nearby/types";
+export { isNearbyError, NearbyError } from "./nearby/types";
+export { parseNearbyText } from "./nearby/codec";
 
-let browserNode: NetworkNode | null = null;
+let browserNetwork: BrowserNetwork | null = null;
+let browserMode: NetworkMode | null = null;
 
-/** This tab's network node; null outside the browser. */
-export function getNetworkNode(): NetworkNode | null {
+function getBrowserNetwork(): BrowserNetwork | null {
   if (typeof window === "undefined") {
     return null;
   }
-  if (!browserNode) {
-    browserNode = createBrowserNode();
+  if (!browserNetwork) {
+    browserNetwork = createBrowserNetwork(getNetworkMode());
   }
-  return browserNode;
+  return browserNetwork;
+}
+
+/** This tab's network node; null outside the browser. */
+export function getNetworkNode(): NetworkNode | null {
+  return getBrowserNetwork()?.node ?? null;
 }
 
 /**
@@ -159,4 +176,70 @@ export function subscribeToPublicGames(callback: (games: PublicGame[]) => void):
 export function listRecentGames(): RecentGame[] {
   const node = getNetworkNode();
   return node ? node.listRecentGames() : [];
+}
+
+/* ------------------------------------------------------------------ */
+/* Nearby play                                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * This tab's network mode: "nearby" with `?net=nearby` or on a page under
+ * /nearby/, "local" with `?net=local`, "webrtc" otherwise (and outside the
+ * browser). Chosen on first use (of this or of any function above) and kept
+ * for the tab's lifetime (sessionStorage across reloads, until `?net=webrtc`):
+ * switching mode takes a full page load. In nearby mode every in-app
+ * navigation must stay client-side (Next router): a page load closes the links.
+ */
+export function getNetworkMode(): NetworkMode {
+  if (typeof window === "undefined") {
+    return "webrtc";
+  }
+  if (!browserMode) {
+    browserMode = selectTransportKind();
+  }
+  return browserMode;
+}
+
+/**
+ * This tab's nearby links (creating the network node on first use); null
+ * unless the tab is in nearby mode. See NearbyApi:
+ *
+ *   inviter: const invite = await nearby.createInvite({ gameId })  -> show invite.url as a QR code
+ *   guest:   const reply = await nearby.answerInvite(scannedText)  -> show reply.url as a QR code;
+ *            reply.connected resolves with { peerId, gameId } once linked
+ *   inviter: await invite.acceptReply(scannedText) (or nearby.acceptReply(text), which finds the
+ *            invite by its token); invite.connected resolves with the NearbyLink once linked
+ *
+ * Every rejection is a NearbyError whose `reason` says why (see NearbyErrorReason).
+ * Linked tabs then appear in game rooms like any peer (ConnectionInfo.peers,
+ * peerId = NearbyLink.peerId), and link with each other without more QR codes.
+ */
+export function getNearby(): NearbyApi | null {
+  return getBrowserNetwork()?.nearby ?? null;
+}
+
+/**
+ * A page opened with a reply URL (the inviter's camera app opens it in a new
+ * tab): hand the reply to the tab of this browser that holds the invite.
+ * Resolves true when that tab took it (it then applies it: this page can
+ * say so and be closed), false when no tab did within `timeoutMs` (the
+ * inviting tab is in another browser, or gone) or the text is not a reply.
+ */
+export function deliverReplyToOtherTab(text: string, timeoutMs = 1500): Promise<boolean> {
+  if (typeof window === "undefined") {
+    return Promise.resolve(false);
+  }
+  return deliverReply(text, timeoutMs);
+}
+
+/** Whether this browser joined the game in nearby mode (from any tab, in any mode: see NetworkMode). */
+export function isNearbyGame(gameId: string): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    return isRememberedNearbyGame(window.localStorage, gameId);
+  } catch {
+    return false;
+  }
 }

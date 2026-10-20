@@ -13,10 +13,29 @@
  *   again or back online: re-join (NetworkNode.revive).
  *
  * In-app route changes fire none of these: they keep the rooms' grace period.
+ *
+ * In nearby mode (./nearby/links.ts) the page going away also closes every
+ * link, after the rooms' goodbyes went out on them (withNearbyLinks).
  */
 import type { NetworkNode } from "./node";
 
-type LifecycleNode = Pick<NetworkNode, "depart" | "revive" | "refresh">;
+export type LifecycleNode = Pick<NetworkNode, "depart" | "revive" | "refresh">;
+
+/**
+ * The node, plus nearby links that close when the page goes away: after the
+ * node departed, since the rooms' goodbyes travel on the links. Nothing
+ * reopens them when the page comes back (that takes new QR codes).
+ */
+export function withNearbyLinks(node: LifecycleNode, links: { depart(): void }): LifecycleNode {
+  return {
+    depart: () => {
+      node.depart();
+      links.depart();
+    },
+    revive: () => node.revive(),
+    refresh: () => node.refresh(),
+  };
+}
 
 /** `document`, or a stand-in in tests. */
 type VisibilitySource = EventTarget & { readonly visibilityState: string };

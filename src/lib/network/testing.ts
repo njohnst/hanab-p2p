@@ -9,6 +9,7 @@ import IGameState, { GameMode, GameVariant, IAction, IGameHintsLevel, IGameOptio
 import { NetworkNode, NetworkTimings } from "./node";
 import { createMemoryStorage, KeyValueStorage } from "./storage";
 import { MemoryNetwork } from "./transports/memory";
+import { Transport } from "./transports/types";
 import { ConnectionInfo, Rejection } from "./types";
 
 export const TEST_TIMINGS: NetworkTimings = {
@@ -111,13 +112,20 @@ export interface TestPeer {
 }
 
 export function createPeer(
-  network: MemoryNetwork,
+  network: MemoryNetwork | null,
   name: string,
-  options: { storage?: KeyValueStorage; authorKey?: string; playerId?: string; timings?: Partial<NetworkTimings> } = {}
+  options: {
+    storage?: KeyValueStorage;
+    authorKey?: string;
+    playerId?: string;
+    timings?: Partial<NetworkTimings>;
+    /** Instead of the in-memory network's (e.g. the nearby transport over fake WebRTC). */
+    transport?: Transport;
+  } = {}
 ): TestPeer {
   const storage = options.storage ?? createMemoryStorage();
   const node = new NetworkNode({
-    transport: network.transport(name),
+    transport: options.transport ?? network.transport(name),
     storage,
     authorKey: options.authorKey ?? `key-${name}`,
     getPlayerId: () => options.playerId ?? name,

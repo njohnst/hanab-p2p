@@ -1,6 +1,16 @@
 import IGameState from "~/lib/state";
 
 /**
+ * How a tab reaches the other players, fixed for the tab's lifetime:
+ *
+ * webrtc - over the internet: WebRTC with signaling through public Nostr relays (Trystero).
+ * local  - tabs of this browser only, over BroadcastChannel (`?net=local`).
+ * nearby - devices on the same local network, no internet: links bootstrapped with QR codes
+ *          (`?net=nearby`, or any page under /nearby/).
+ */
+export type NetworkMode = "webrtc" | "local" | "nearby";
+
+/**
  * local      - pass & play / tutorial game: never touches the network.
  * connecting - joining the signaling relays, no peer seen yet.
  * alone      - signaling works but no other peer is in the room right now.

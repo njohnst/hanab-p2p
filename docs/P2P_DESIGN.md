@@ -125,6 +125,99 @@ announced.
   rejected conflicting turns, authority leaving mid-game, stale peer rejoining, split brain healing),
   persistence and protocol mismatch.
 
+## Nearby play (no internet)
+
+Players on the same local network (home Wi-Fi, a phone's hotspot, an office intranet that blocks the
+internet) can play with **no server of any kind**: no signaling relay, no STUN. The WebRTC offer and
+answer are exchanged as QR codes, one in each direction.
+
+### Mode
+
+- A tab is in one network mode for its lifetime, chosen when its network node is created:
+  `webrtc` (Trystero, default), `local` (`?net=local`) or **`nearby`**: `?net=nearby`, or any page
+  under `/nearby/`. The choice is kept in sessionStorage like `local`; `?net=webrtc` switches back.
+  Switching mode is a full page load (the node is a per-tab singleton).
+- Nearby mode uses only the nearby transport (no Trystero). `isOnline` is always true there: the
+  browser's online flag says nothing about the LAN.
+- Games joined in nearby mode are remembered in localStorage (`hanab.nearbyGames`, at most 50), so
+  the UI can offer to switch mode when one is opened from an online tab.
+- Inside nearby mode every in-app navigation must be client-side (Next router): a full page load
+  closes the WebRTC connections, and getting them back takes a new QR exchange.
+
+### Handshake (two QR codes)
+
+1. The **inviter** (any connected player) calls `createInvite()`: a new RTCPeerConnection with
+   `iceServers: []` and an ordered data channel, `createOffer`, then waits for ICE gathering to
+   complete (at most ~3s). Its compact description becomes the **invite URL**
+   `<origin><basePath>/nearby/#o=<code>`, shown as a QR code.
+2. The **guest** scans it, with the phone's own camera app (the URL opens the app) or the in-app
+   scanner, and calls `answerInvite(text)`: `setRemoteDescription(offer)`, `createAnswer`, gather,
+   and shows the **reply URL** `<origin><basePath>/nearby/#a=<code>` as a QR code.
+3. The inviter scans the reply (`invite.acceptReply(text)`): `setRemoteDescription(answer)`. The data
+   channel opens; both sides exchange `hi` (the inviter's carries the game id, so the guest's page can
+   open the game).
+
+The fragment never reaches a server. A reply URL opened by the inviter's camera app lands in a new tab
+of the same browser, which hands it to the inviting tab over BroadcastChannel (`hanab-nearby`) and
+says so.
+
+### Compact codes
+
+Only what the remote side needs travels: ICE ufrag and pwd, the DTLS fingerprint, the DTLS role
+(`setup`), the `mid`, host candidates (protocol, address, port) and a 4-byte invite token that the
+reply echoes (an inviter keeps several invites pending and matches replies by token). The other side
+rebuilds a standard SDP from it (`m=application 9 UDP/DTLS/SCTP webrtc-datachannel`, `sctp-port:5000`,
+`max-message-size:262144`, `end-of-candidates`). Binary, versioned (first byte), base64url: about 90
+bytes, so ~120 characters and a QR code of version 8-10 with error correction M. Addresses are encoded
+by kind: IPv4 (4 bytes), IPv6 (16), mDNS `<uuid>.local` (16), other hostnames (length-prefixed);
+at most 8 candidates, host candidates only.
+
+Browsers hide host addresses behind mDNS names (`<uuid>.local`) unless the page has camera or
+microphone permission. Networks that block multicast cannot resolve them, so the UI starts the camera
+(needed anyway to scan the reply) **before** creating an invite: the invite then carries real
+addresses, and one side with real addresses is enough (the other side is discovered as a
+peer-reflexive candidate).
+
+### Links and the mesh
+
+- A **link** is one RTCPeerConnection + data channel to another tab, identified by a random per-tab
+  `selfId`. Links carry a small JSON protocol: `hi` (id, rooms, open links, game id, player id,
+  protocol), `rooms`, `peers`, `m` (a room message), `sig` (relayed signaling), `ping`/`pong`, `bye`,
+  and `part` (messages over 16 KB are split).
+- **Mesh**: QR codes only bootstrap the first link. Each tab announces its open links (`peers`); when
+  a tab learns of a peer it has no link with, the one with the smaller `selfId` sends it an offer
+  relayed by the common neighbour (`sig`, trickle ICE), so every pair ends up directly connected
+  without more QR codes. A relay only forwards between two of its own open links (one hop). Mesh
+  attempts that fail are retried when the peer list next changes.
+- A link is dropped when its data channel closes, its connection fails, or nothing was heard for 30s
+  (heartbeat every 5s; a throttled background timer does not expire anyone). `pagehide` closes every
+  link with `bye`.
+- **Rooms over links**: the nearby transport implements `Transport` (`kind: "nearby"`). Joining a
+  room adds it to the tab's room list sent to every link; a room's peers are the open links that
+  listed it. Room passwords are not used: links are authenticated by the DTLS fingerprint that came
+  through the QR code, from someone physically present.
+
+### Getting the app without internet
+
+- **Offline cache**: the build writes `sw.js`, a service worker that precaches the whole export
+  (except source maps), versioned by a content hash. Pages and assets come from the cache first, so a
+  device that opened the site once can open it again with no internet, including from the camera app.
+  A new version installs in the background, activates at once (`skipWaiting`, `clients.claim`) and is
+  used from the next page load; the previous cache is kept so an already open page can still load its
+  lazy chunks. It only registers in production builds on secure pages.
+- **Self-hosted on the LAN**: `yarn serve:static` listens on every interface and prints the LAN
+  URLs. Pages opened at `http://<lan-ip>` are not secure contexts: no in-app camera (scan with the
+  camera app or a photo instead), no service worker, but nearby play works. On `localhost` the page
+  asks the server for its LAN origins (`<basePath>/nearby-origins.json`) so that invite URLs open on
+  other devices. `TLS_CERT`/`TLS_KEY` serve https (e.g. with certificates from mkcert).
+
+### Limits
+
+- Reloading a page, or a phone killing a background tab, ends that tab's links: any connected player
+  invites it again (☰ → Invite players). The game itself is safe in every replica.
+- Links are direct only: two tabs that cannot reach each other (client isolation on some guest Wi-Fi)
+  do not see each other, even if both reach a third.
+
 ## UI additions
 
 - Lobby: share panel with the link, a QR code (`qrcode` package, rendered as SVG), copy, and Web Share

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sendMessage } from "~/lib/actions";
 import IGameState from "~/lib/state";
 import { documentOf } from "./document";
-import { watchPageLifecycle } from "./lifecycle";
+import { watchPageLifecycle, withNearbyLinks } from "./lifecycle";
 import { PUBLIC_LOBBY_ROOM } from "./publicLobby";
 import { createPeer, lobbyGame, replicaOf, runBots, startedGame, TestPeer } from "./testing";
 import { MemoryNetwork } from "./transports/memory";
@@ -352,6 +352,23 @@ describe("page lifecycle events", () => {
     expect(peerIds(b)).toEqual(["a"]);
     expect(joinsOf("a")).toBe(1);
     expect(authorities([a, b])).toEqual(["a"]);
+    unwatch();
+  });
+
+  it("closes nearby links after the rooms said goodbye on them, and does not reopen them", () => {
+    const calls: string[] = [];
+    const node = {
+      depart: () => calls.push("node.depart"),
+      revive: () => calls.push("node.revive"),
+      refresh: () => calls.push("node.refresh"),
+    };
+    const { page, doc, fire } = fakePage();
+    const unwatch = watchPageLifecycle(withNearbyLinks(node, { depart: () => calls.push("links.depart") }), page, doc);
+
+    fire(page, "pagehide");
+    fire(page, "pageshow", { persisted: true });
+    fire(page, "offline");
+    expect(calls).toEqual(["node.depart", "links.depart", "node.revive", "node.refresh"]);
     unwatch();
   });
 });

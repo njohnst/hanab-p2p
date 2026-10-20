@@ -1,7 +1,8 @@
 /**
  * The one small interface every transport implements: Trystero/WebRTC in
  * production, BroadcastChannel between tabs of one browser (`?net=local`),
- * and an in-memory network for tests.
+ * nearby links with no internet (`?net=nearby`, ../nearby/transport.ts), and
+ * an in-memory network for tests.
  *
  * A transport only moves JSON-serialisable messages between the peers of a
  * room and reports who is connected; ordering, authority and merging live in
@@ -34,7 +35,7 @@ export interface JoinOptions {
 }
 
 export interface Transport {
-  readonly kind: "webrtc" | "local" | "memory";
+  readonly kind: "webrtc" | "local" | "nearby" | "memory";
   /**
    * Join a room. Handlers may be called as soon as the returned promise
    * resolves. Rejects when the room cannot be joined at all.
