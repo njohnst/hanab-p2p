@@ -7,11 +7,14 @@ import { useRouter } from "next/router";
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import LanguageSelector from "~/components/languageSelector";
+import { NearbyModeBanner } from "~/components/nearbyBanners";
 import Rules from "~/components/rules";
 import Button, { ButtonSize } from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
+import { useNetworkMode } from "~/hooks/networkMode";
 import { useSession } from "~/hooks/session";
 import { logFailedPromise } from "~/lib/errors";
+import { openNearbyPage } from "~/lib/nearbyPlay";
 // Types only: the sync engine and the game logic are loaded once the page is up (see Home).
 import type { RecentGame } from "~/lib/network";
 import { gameUrl, withBasePath } from "~/lib/routes";
@@ -94,6 +97,7 @@ export default function Home() {
   const router = useRouter();
   const { t } = useTranslation();
   const { playerId } = useSession();
+  const mode = useNetworkMode();
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
   const rulesRef = useRef<HTMLDivElement>();
   const fireworksRef = useRef();
@@ -166,6 +170,7 @@ export default function Home() {
       </div>
       {/* Grows past the screen height (instead of overflowing it) when the games list makes it taller */}
       <div className="min-vh-100 pv4 flex flex-column items-center justify-center">
+        {mode === "nearby" && <NearbyModeBanner className="mt4 mb4" />}
         <div className="flex flex-column items-center">
           <div className="mb4 w4 h4">
             <Image
@@ -208,6 +213,17 @@ export default function Home() {
               {t("learnHanabTime", "~5 mn")}
             </Txt>
           </Button>
+          {/* Opens /nearby/ with a page load, which puts the tab in nearby mode (once there, the banner above says so). */}
+          {mode !== "nearby" && (
+            <Button
+              outlined
+              className="mb4"
+              id="play-nearby"
+              size={ButtonSize.MEDIUM}
+              text={t("nearby.playWithoutInternet")}
+              onClick={() => openNearbyPage(router).catch(logFailedPromise)}
+            />
+          )}
 
           {recentGames.length > 0 && (
             // Zero intrinsic width: takes the buttons' width rather than widening the column to fit long names

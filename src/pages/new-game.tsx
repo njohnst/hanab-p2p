@@ -7,6 +7,7 @@ import Button, { ButtonSize } from "~/components/ui/button";
 import { Checkbox, Field, Select, TextInput } from "~/components/ui/forms";
 import Txt, { TxtSize } from "~/components/ui/txt";
 import useLocalStorage from "~/hooks/localStorage";
+import { useNetworkMode } from "~/hooks/networkMode";
 import { newGame } from "~/lib/actions";
 import { logEvent } from "~/lib/analytics";
 import { generateShuffleSeed, readableUniqueId } from "~/lib/id";
@@ -48,6 +49,8 @@ const BotsSpeeds = {
 export default function NewGame() {
   const router = useRouter();
   const { t } = useTranslation();
+  // Nearby mode (no internet): no public rooms, players join by scanning an invitation in the lobby.
+  const nearby = useNetworkMode() === "nearby";
 
   const [offline, setOffline] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -84,7 +87,7 @@ export default function NewGame() {
         seed,
         allowRollback,
         preventLoss,
-        private: private_,
+        private: private_ || nearby,
         hintsLevel,
         turnsHistory,
         botsWait,
@@ -181,13 +184,15 @@ export default function NewGame() {
               <Checkbox checked={colorBlindMode} onChange={(e) => setColorBlindMode(e.target.checked)} />
             </Field>
 
-            <Field
-              className="pb3 mb3 bb b--yellow-light"
-              label={t("private", "Private")}
-              subText={t("privateSubtext", "Your game won't be visible in the 'Join Room' section")}
-            >
-              <Checkbox checked={private_} onChange={(e) => setPrivate(e.target.checked)} />
-            </Field>
+            {!nearby && (
+              <Field
+                className="pb3 mb3 bb b--yellow-light"
+                label={t("private", "Private")}
+                subText={t("privateSubtext", "Your game won't be visible in the 'Join Room' section")}
+              >
+                <Checkbox checked={private_} onChange={(e) => setPrivate(e.target.checked)} />
+              </Field>
+            )}
 
             <Field className="pb3 mb3 bb b--yellow-light" label={t("seed", "Seed")}>
               <TextInput className="w3 tr" id="seed" value={seed} onChange={(e) => setSeed(e.target.value)} />
@@ -236,6 +241,8 @@ export default function NewGame() {
                   "passandplayExplanation",
                   "In this pass-and-play mode, you can play offline with multiple players that are physically in the same room by passing the device to each player on their turn"
                 )
+              : nearby
+              ? t("nearby.newGameExplanation")
               : t("normalGameExplanation", "You will be able to play online by sharing the game link to your friends.")
           }
         />

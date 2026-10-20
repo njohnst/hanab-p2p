@@ -90,7 +90,7 @@ export default function MenuArea(props: Props) {
 
         {showInvite && (
           <div className="flex flex-column items-center pv3">
-            <ShareGame gameId={game.id} />
+            <ShareGame inviteNow gameId={game.id} />
             <Button className="mt4" size={ButtonSize.SMALL} text={t("back")} onClick={() => setShowInvite(false)} />
           </div>
         )}

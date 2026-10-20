@@ -1,5 +1,5 @@
 import Fireworks from "fireworks-canvas";
-import { useRouter } from "next/router";
+import Router, { useRouter } from "next/router";
 import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { ActionAreaType, ISelectedArea } from "~/components/actionArea";
@@ -28,12 +28,34 @@ import { cheat } from "~/lib/ai-cheater";
 import { logEvent } from "~/lib/analytics";
 import { logFailedPromise } from "~/lib/errors";
 import { uniqueId } from "~/lib/id";
-import { isAuthority, setNotification, setReaction, subscribeToConnection, updateGame } from "~/lib/network";
+import {
+  getNetworkMode,
+  isAuthority,
+  setNotification,
+  setReaction,
+  subscribeToConnection,
+  updateGame,
+} from "~/lib/network";
 import { gameUrl, summaryUrl, withBasePath } from "~/lib/routes";
 import IGameState, { GameMode, IAction, IGameHintsLevel, IGameStatus, IPlayer } from "~/lib/state";
 
 interface Props {
   onGameChange: (game: IGameState) => void;
+}
+
+/**
+ * Open the next game (a rematch). Online, with a page load, as upstream has done since it dropped
+ * router.push here, when the page kept the previous game's state (the play page now remounts
+ * everything for a new game id, but the online behaviour is left as it was). In nearby mode, a
+ * page load would close the links to the other devices, and only a new QR exchange brings them
+ * back: the router it is.
+ */
+function openGame(gameId: string) {
+  if (getNetworkMode() === "nearby") {
+    Router.push(gameUrl(gameId)).catch(logFailedPromise);
+  } else {
+    location.assign(withBasePath(gameUrl(gameId)));
+  }
 }
 
 export function Game(props: Props) {
@@ -247,7 +269,7 @@ export function Game(props: Props) {
     onStopReplay();
     const nextGameId = liveGame().nextGameId;
     setDisplayStats(false);
-    location.assign(withBasePath(gameUrl(nextGameId)));
+    openGame(nextGameId);
   }
 
   // Captured once the game has synced, so we don't redirect when the
@@ -270,7 +292,7 @@ export function Game(props: Props) {
     if (game.nextGameId === initialNextGameIdRef.current) return;
 
     setDisplayStats(false);
-    location.assign(withBasePath(gameUrl(game.nextGameId)));
+    openGame(game.nextGameId);
   }, [game.synced, game.nextGameId]);
 
   function onJoinGame(player: Omit<IPlayer, "id">) {

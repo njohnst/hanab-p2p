@@ -430,3 +430,74 @@ button {
   width: 100%;
   height: 100%;
 }
+
+/**
+ * Nearby play (see ~/components/nearbyInvite, nearbyJoin, qrScanner)
+ */
+
+/* Invitations and replies: big, on pure white (with the standard quiet zone in the SVG), so that
+   phone camera apps read them from across a table. */
+.nearby-qr {
+  width: min(72vw, 280px);
+  height: min(72vw, 280px);
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.nearby-qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.nearby-qr-placeholder {
+  background: transparent;
+  border: 1px dashed var(--color-lavender);
+}
+
+.nearby-link summary {
+  list-style-position: inside;
+}
+
+/* The camera preview: a square showing the centred part of the frame, which is what is decoded. */
+.qr-scanner {
+  position: relative;
+  width: min(60vw, 220px);
+  height: min(60vw, 220px);
+  overflow: hidden;
+  background: #000;
+}
+
+.qr-scanner video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.qr-scanner-frame {
+  position: absolute;
+  top: 12%;
+  right: 12%;
+  bottom: 12%;
+  left: 12%;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.qr-scanner-status {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0, 16, 48, 0.7);
+}
+
+/* In nearby mode, pulling down to refresh would reload the page and close the links to the other
+   devices (see useNetworkMode). */
+html.nearby-mode,
+html.nearby-mode body {
+  overscroll-behavior-y: contain;
+}

@@ -1,62 +1,51 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { NearbyInvite, NearbyInviteModal } from "~/components/nearbyInvite";
+import QrCode from "~/components/qrCode";
 import Button, { ButtonSize } from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
-import { logFailedPromise } from "~/lib/errors";
+import { useNetworkMode } from "~/hooks/networkMode";
+import { copyText } from "~/lib/clipboard";
 import { absoluteGameUrl } from "~/lib/routes";
 
 interface Props {
   gameId: string;
   className?: string;
-}
-
-async function renderQrSvg(text: string): Promise<string> {
-  // Loaded on demand: only lobbies and the invite dialog need it.
-  const mod = await import("qrcode");
-  const QRCode = ((mod as unknown) as { default?: typeof mod }).default ?? mod;
-
-  return QRCode.toString(text, { type: "svg", margin: 1, errorCorrectionLevel: "M" });
-}
-
-function copyWithTextarea(text: string) {
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand("copy");
-  document.body.removeChild(textarea);
+  /**
+   * The player just asked to invite (the in-game menu's "Invite players"): in nearby mode, start
+   * the invitation at once instead of offering a button for it.
+   */
+  inviteNow?: boolean;
 }
 
 /**
- * Invite panel for network games: a QR code of the game link, the link
- * itself, a Copy button and, where the device supports it, the native Share sheet.
+ * Invite panel for network games. Online: a QR code of the game link, the link itself, a Copy
+ * button and, where the device supports it, the native Share sheet. In nearby mode (no internet),
+ * the game link would lead nowhere: players are invited with the nearby QR handshake instead
+ * (~/components/nearbyInvite).
  */
 export default function ShareGame(props: Props) {
+  const mode = useNetworkMode();
+
+  if (mode === null) {
+    return null;
+  }
+
+  return mode === "nearby" ? <NearbyShareGame {...props} /> : <OnlineShareGame {...props} />;
+}
+
+function OnlineShareGame(props: Props) {
   const { gameId, className = "" } = props;
   const { t } = useTranslation();
 
   // Browser-only values, resolved after mount so pre-rendered markup matches.
   const [url, setUrl] = useState<string>(null);
-  const [qrSvg, setQrSvg] = useState<string>(null);
   const [canShare, setCanShare] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const link = absoluteGameUrl(gameId);
-    setUrl(link);
+    setUrl(absoluteGameUrl(gameId));
     setCanShare(typeof navigator.share === "function");
-
-    let cancelled = false;
-    renderQrSvg(link)
-      .then((svg) => !cancelled && setQrSvg(svg))
-      .catch(logFailedPromise);
-
-    return () => {
-      cancelled = true;
-    };
   }, [gameId]);
 
   useEffect(() => {
@@ -67,11 +56,7 @@ export default function ShareGame(props: Props) {
   }, [copied]);
 
   async function onCopy() {
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      copyWithTextarea(url);
-    }
+    await copyText(url);
     setCopied(true);
   }
 
@@ -86,11 +71,10 @@ export default function ShareGame(props: Props) {
 
   return (
     <div className={`flex flex-column flex-row-ns items-center ${className}`}>
-      <div
-        dangerouslySetInnerHTML={qrSvg ? { __html: qrSvg } : undefined}
-        aria-label={t("scanToJoin")}
+      <QrCode
         className="share-qr bg-white br2 pa1 flex-shrink-0 mb3 mb0-ns mr3-ns"
-        role="img"
+        label={t("scanToJoin")}
+        text={url}
       />
       <div className="flex flex-column items-center items-start-ns mw6">
         <Txt className="mb1" value={t("shareGame")} />
@@ -103,6 +87,32 @@ export default function ShareGame(props: Props) {
           {canShare && <Button className="ml2" size={ButtonSize.SMALL} text={t("share")} onClick={onShare} />}
         </div>
       </div>
+    </div>
+  );
+}
+
+function NearbyShareGame(props: Props) {
+  const { gameId, className = "", inviteNow = false } = props;
+  const { t } = useTranslation();
+  const [inviting, setInviting] = useState(false);
+
+  if (inviteNow) {
+    return <NearbyInvite className={className} gameId={gameId} />;
+  }
+
+  // The lobby: the invitation (camera, two QR codes) is too tall to fit in it, so it opens in a dialog.
+  return (
+    <div className={`flex flex-column items-center items-start-ns ${className}`}>
+      <Txt className="mb1" value={t("invitePlayers")} />
+      <Txt className="lavender mb2 tc tl-ns" size={TxtSize.SMALL} value={t("nearby.invite.lobbyHint")} />
+      <Button
+        primary
+        id="invite-nearby"
+        size={ButtonSize.SMALL}
+        text={t("nearby.invite.button")}
+        onClick={() => setInviting(true)}
+      />
+      {inviting && <NearbyInviteModal gameId={gameId} onClose={() => setInviting(false)} />}
     </div>
   );
 }

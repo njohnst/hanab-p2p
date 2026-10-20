@@ -63,6 +63,128 @@ export const fr = {
     ongoing: "En cours",
     over: "Terminée",
   },
+  nearby: {
+    title: "Jouer à proximité, sans internet",
+    intro:
+      "Les téléphones et ordinateurs connectés au même Wi-Fi, ou au partage de connexion d'un téléphone, peuvent jouer ensemble sans connexion internet. Un joueur de la partie affiche un QR code d'invitation : scanne-le, puis laisse-le scanner le code qui apparaît sur ton écran.",
+    playWithoutInternet: "Jouer sans internet",
+    modeBanner: "Mode proximité : cet onglet joue avec les appareils autour de toi, sans internet.",
+    scanInvitation: "Scanner une invitation",
+    playOnline: "Jouer en ligne",
+    switching: "Passage en mode proximité…",
+    connecting: "Connexion…",
+    copyLinkSummary: "Impossible de scanner ? Copier le lien",
+    noConnection:
+      "Les appareils n'ont pas pu se connecter. Sont-ils sur le même Wi-Fi ? Certains réseaux invités isolent les appareils : le partage de connexion d'un téléphone fonctionne à la place.",
+    noWebrtc: "Ce navigateur ne peut pas se connecter aux appareils à proximité. Essaie un autre navigateur.",
+    indicator: "À proximité",
+    playersNearby: "{{online}}/{{total}} à proximité",
+    inviteAgainHint:
+      "Cet appareil n'est connecté à personne. N'importe quel joueur connecté peut l'inviter à nouveau : ☰ → Inviter des joueurs, puis scanne son code.",
+    waitingForGame:
+      "Personne à proximité n'a encore transmis cette partie à cet appareil. Demande à un joueur qui l'a de t'inviter (☰ → Inviter des joueurs), puis scanne son code.",
+    newGameExplanation:
+      "Les joueurs à proximité rejoindront la partie en scannant un QR code dans le lobby : pas besoin d'internet.",
+    switchBanner: "Cette partie se joue à proximité, sans internet.",
+    switchButton: "Passer en mode proximité",
+    dismiss: "Fermer",
+    scanner: {
+      start: "Scanner avec la caméra",
+      starting: "Démarrage de la caméra…",
+      preview: "Aperçu de la caméra",
+      read: "Code lu",
+      retry: "Réessayer",
+      takePhoto: "Prendre une photo",
+      readingPhoto: "Lecture de la photo…",
+      noCodeInPhoto: "Aucun QR code trouvé sur cette photo. Reprends-la de plus près, avec tout le code dans l'image.",
+      pasteLabel: "Ou colle le code ou le lien :",
+      pastePlaceholder: "https://…/nearby/#…",
+      use: "OK",
+      insecure:
+        "La caméra ne fonctionne que sur les pages sécurisées (https ou localhost). Scanne avec l'appareil photo du téléphone, prends une photo ou colle le code à la place.",
+      unsupported: "Ce navigateur ne peut pas utiliser la caméra ici. Prends une photo ou colle le code à la place.",
+      denied:
+        "La caméra est bloquée. Autorise-la dans les réglages du navigateur pour ce site, ou prends une photo ou colle le code à la place.",
+      noCamera: "Aucune caméra trouvée. Prends une photo ou colle le code à la place.",
+      busy: "Une autre application utilise la caméra. Ferme-la, puis réessaie.",
+      error: "La caméra n'a pas pu démarrer.",
+    },
+    invite: {
+      title: "Inviter un joueur à proximité",
+      button: "Inviter à proximité",
+      lobbyHint: "Il scanne un QR code sur ton écran : pas besoin d'internet.",
+      step1: "1. Demande-lui de scanner ce code avec son appareil photo",
+      step2: "2. Puis scanne le code qui apparaît sur son écran",
+      qrLabel: "QR code d'invitation",
+      allowCamera: "Autorise la caméra : elle sert à scanner sa réponse, et aide les appareils à se trouver.",
+      skipCamera: "Continuer sans la caméra",
+      preparing: "Préparation de l'invitation…",
+      address: "Adresse pour les autres appareils",
+      localhostWarning:
+        "Cette page est ouverte sur localhost, que les autres appareils ne peuvent pas ouvrir. Ils peuvent quand même scanner ce code depuis l'application (Rejoindre une partie), ou ouvrir l'application à l'adresse réseau de cet ordinateur.",
+      connected: "Connecté ! La partie s'ouvre sur son écran.",
+      another: "Inviter un autre joueur",
+      done: "Terminé",
+      retry: "Nouvelle invitation",
+      expired: "Cette invitation a expiré.",
+      prepareFailed: "L'invitation n'a pas pu être préparée.",
+      notice: {
+        notNearby:
+          "Ce n'est pas un code de proximité. Scanne le code qui apparaît sur son écran une fois qu'il a scanné le tien.",
+        malformed: "Ce code est incomplet. Scanne-le à nouveau.",
+        invitation:
+          "C'est une invitation. Scanne la réponse qui apparaît sur son écran une fois qu'il a scanné le tien.",
+        otherInvitation: "Cette réponse correspond à une autre invitation. Demande-lui de scanner le code affiché ici.",
+        ownCode: "C'est le code de cet appareil. Scanne celui qui est sur son écran.",
+        otherVersion:
+          "Son application est une autre version de Hanab. Recharge la page sur les deux appareils, puis réessaie.",
+      },
+    },
+    answer: {
+      title: "Rejoindre une partie à proximité",
+      preparing: "Préparation de ta réponse…",
+      show: "Montre ce code au joueur qui t'a invité",
+      qrLabel: "QR code de réponse",
+      hint: "Il le scanne depuis son écran d'invitation. La partie s'ouvre ici dès que vous êtes connectés.",
+      waiting: "En attente de son scan…",
+      cancel: "Annuler",
+      connected: "Connecté ! Ouverture de la partie…",
+      scanAnother: "Scanner une autre invitation",
+      malformed: "Cette invitation est incomplète ou abîmée. Scanne-la à nouveau.",
+      notAnInvitation:
+        "C'est une réponse, pas une invitation : elle doit être scannée par l'appareil qui affiche l'invitation.",
+      ownInvitation: "Cette invitation a été créée sur cet appareil : scanne-la avec un autre appareil.",
+      otherVersion:
+        "Cette invitation vient d'une autre version de Hanab. Recharge la page sur les deux appareils, puis réessaie.",
+      expired: "L'invitation a expiré. Demandes-en une nouvelle.",
+    },
+    reply: {
+      title: "Réponse à une invitation",
+      delivering: "Envoi de la réponse à l'invitation…",
+      delivered: "Réponse envoyée à l'onglet qui affiche l'invitation. Retournes-y : tu peux fermer cet onglet.",
+      applied: "Réponse reçue : les appareils se connectent.",
+      notDelivered:
+        "Cette réponse est destinée à l'appareil qui affiche l'invitation, mais aucune invitation n'est ouverte dans ce navigateur.",
+      how: "Sur cet appareil, scanne ce code depuis l'écran d'invitation, ou copie le lien et colle-le là-bas.",
+      copy: "Copier le lien de réponse",
+    },
+    join: {
+      title: "Rejoindre une partie à proximité",
+      explanation:
+        "Demande à un joueur de la partie d'afficher son invitation (☰ → Inviter des joueurs), puis scanne-la.",
+      scanHint: "Scanne l'invitation sur son écran",
+      offer: "Pas d'internet ? Jouer à proximité",
+      notNearby: "Ce n'est pas une invitation de proximité. Demandes-en une : ☰ → Inviter des joueurs.",
+      reply: "C'est une réponse : elle doit être scannée par l'appareil qui affiche l'invitation.",
+      replyHandedOff:
+        "C'était une réponse : elle a été envoyée à l'invitation ouverte dans un autre onglet de ce navigateur.",
+    },
+    links: {
+      title: "Appareils à proximité",
+      none: "Connecté à aucun appareil pour l'instant.",
+      device: "Appareil {{id}}",
+    },
+  },
   waitForOthers: "Tu peux attendre les autres ou ",
   gameStarted: "Début de la partie",
   gameStarts: "Début de la partie",

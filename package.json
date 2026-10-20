@@ -20,6 +20,7 @@
     "i18next": "^19.9.2",
     "i18next-browser-languagedetector": "^6.0.1",
     "imagemin-optipng": "^8.0.0",
+    "jsqr": "1.4.0",
     "lodash": "^4.17.21",
     "mem": "^8.0.0",
     "moment": "^2.29.1",

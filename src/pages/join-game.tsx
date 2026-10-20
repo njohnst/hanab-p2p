@@ -2,14 +2,49 @@ import { useRouter } from "next/router";
 import React, { FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import HomeButton from "~/components/homeButton";
+import NearbyJoin from "~/components/nearbyJoin";
 import Button, { ButtonSize } from "~/components/ui/button";
 import { TextInput } from "~/components/ui/forms";
 import Txt, { TxtSize } from "~/components/ui/txt";
+import { useNetworkMode } from "~/hooks/networkMode";
 import { logFailedPromise } from "~/lib/errors";
+import { nearbyPageHref } from "~/lib/nearbyPlay";
 import { PublicGame, subscribeToPublicGames } from "~/lib/network";
 import { gameUrl, parseGameReference } from "~/lib/routes";
 
+/**
+ * Join a room: by its name or link, or from the public rooms list. In nearby mode (no internet)
+ * neither can work: players join by scanning an invitation instead.
+ */
 export default function JoinGame() {
+  const mode = useNetworkMode();
+
+  return mode === "nearby" ? <JoinNearbyGame /> : <JoinOnlineGame />;
+}
+
+function JoinNearbyGame() {
+  const router = useRouter();
+  const { t } = useTranslation();
+
+  return (
+    <div className="w-100 h-100 overflow-y-scroll relative bg-main-dark pa2 pv4-l ph3-l shadow-5 br3">
+      <HomeButton className="absolute top-1 right-1" />
+      <div className="center mw6 w-100 ph2 pv4 flex flex-column items-center">
+        <Txt className="mb3 tc" size={TxtSize.MEDIUM} value={t("nearby.join.title")} />
+        <Txt className="lavender tc mb4" value={t("nearby.join.explanation")} />
+        <NearbyJoin />
+        <Button
+          className="mt5"
+          size={ButtonSize.MEDIUM}
+          text={t("createRoom", "Create a room")}
+          onClick={() => router.push("/new-game").catch(logFailedPromise)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function JoinOnlineGame() {
   const router = useRouter();
   const { t } = useTranslation();
 
@@ -80,6 +115,10 @@ export default function JoinGame() {
               )}
             />
           )}
+          {/* A page load: /nearby/ puts the tab in nearby mode. */}
+          <a className="db mt3 lavender underline" href={nearbyPageHref()} id="play-nearby">
+            <Txt size={TxtSize.SMALL} value={t("nearby.join.offer")} />
+          </a>
         </form>
 
         <section className="w-100">
