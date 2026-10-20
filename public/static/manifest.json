@@ -1,12 +1,13 @@
 {
   "short_name": "Hanab",
   "name": "Hanab",
-  "description": "Play the Hanab game online with your friends!",
+  "description": "Play the Hanab game online with your friends, or nearby without internet!",
   "icons": [
-    { "src": "/static/hanab.png", "type": "image/png", "sizes": "512x512" },
-    { "src": "/static/hanab-192.png", "type": "image/png", "sizes": "192x192" }
+    { "src": "hanab.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "hanab-192.png", "type": "image/png", "sizes": "192x192" }
   ],
-  "start_url": "/",
+  "start_url": "../",
+  "scope": "../",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#00153f",

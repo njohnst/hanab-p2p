@@ -13,3 +13,6 @@ Notes
 # static export
 out
 tsconfig.tsbuildinfo
+
+# TLS certificates for yarn serve:static (TLS_CERT, TLS_KEY), e.g. from mkcert
+*.pem

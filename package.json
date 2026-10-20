@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "cross-env NODE_OPTIONS='--openssl-legacy-provider' next dev",
-    "build": "cross-env NODE_OPTIONS='--openssl-legacy-provider' next build",
+    "build": "cross-env NODE_OPTIONS='--openssl-legacy-provider' next build && node scripts/generate-sw.mjs",
     "lint": "eslint \"**/*.{ts,tsx}\"",
     "test": "vitest run",
     "serve:static": "node scripts/serve-static.mjs"

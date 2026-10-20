@@ -13,6 +13,7 @@ import { logFailedPromise } from "~/lib/errors";
 import { detectLanguage, i18n } from "~/lib/i18n";
 import { getPlayerId } from "~/lib/playerId";
 import { withBasePath } from "~/lib/routes";
+import { registerServiceWorker } from "~/lib/serviceWorker";
 import "../styles/style.css";
 
 Router.events.on("routeChangeComplete", () => logPageView());
@@ -36,6 +37,7 @@ Router.events.on("routeChangeError", () => {
 export default function App(props: AppProps) {
   useEffect(() => {
     initAnalytics();
+    registerServiceWorker();
   }, []);
 
   return <Hanab {...props} />;
