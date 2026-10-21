@@ -106,10 +106,6 @@ function Meta() {
   return (
     <Head>
       <title>{title}</title>
-      <style>
-        @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&display=swap'); @import
-        url('https://fonts.googleapis.com/css2?family=Kalam&display=swap');
-      </style>
       <link href={withBasePath("/static/favicon.ico")} rel="shortcut icon" type="image/x-icon" />
       <link href={image} rel="apple-touch-icon" />
       <link href={withBasePath("/static/manifest.json")} rel="manifest" />
