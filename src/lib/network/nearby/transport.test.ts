@@ -143,6 +143,12 @@ describe("nearby transport", () => {
     expect(isTransportUnavailable(error)).toBe(true);
   });
 
+  it("refuses a room id other tabs would not accept", async () => {
+    const transport = createNearbyTransport(tab("x"));
+    const error = await transport.join("G".repeat(129), { password: "G" }, recorder().handlers).catch((e) => e);
+    expect(isTransportUnavailable(error)).toBe(true);
+  });
+
   it("remembers the games joined (at most 50, most recent first), not the public lobby", async () => {
     const storage = createMemoryStorage();
     const transport = createNearbyTransport(tab("a"), { storage: () => storage });

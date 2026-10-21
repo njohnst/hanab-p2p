@@ -16,7 +16,7 @@ import { PUBLIC_LOBBY_ROOM } from "../publicLobby";
 import { KeyValueStorage } from "../storage";
 import { JoinOptions, Transport, TransportHandlers, TransportRoom, transportUnavailable } from "../transports/types";
 import { rememberNearbyGame } from "./games";
-import { LinkManager } from "./links";
+import { isRoom, LinkManager } from "./links";
 
 export interface NearbyTransportOptions {
   /** Where nearby games are remembered (localStorage in browsers). */
@@ -85,6 +85,9 @@ export function createNearbyTransport(links: LinkManager, options: NearbyTranspo
     async join(roomId: string, _options: JoinOptions, handlers: TransportHandlers): Promise<TransportRoom> {
       if (!links.supported) {
         throw transportUnavailable("This browser cannot play with nearby devices (no WebRTC support).");
+      }
+      if (!isRoom(roomId)) {
+        throw transportUnavailable("This game's name is too long to play with nearby devices.");
       }
       const membership: Membership = { roomId, handlers, members: new Set(), ready: false, left: false, queued: [] };
       const memberships = rooms.get(roomId) ?? new Set<Membership>();

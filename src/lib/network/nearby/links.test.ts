@@ -522,6 +522,19 @@ describe("messages", () => {
     expect(traffic.messages).toEqual([{ peerId: "a", roomId: "Room", data: 1 }]);
     expect(open(b)).toEqual(["a"]);
   });
+
+  it("never announces a room id other tabs would refuse (it would make them drop the whole list)", async () => {
+    const [a, b] = ["a", "b"].map((id) => tab(id));
+    const tooLong = "x".repeat(129);
+    a.setRooms(["Game1", tooLong]);
+    await qr(a, b, tooLong);
+    expect(open(b)).toEqual(["a"]);
+    expect(b.roomPeers("Game1")).toEqual(["a"]);
+
+    a.setRooms([tooLong]);
+    await settle(100);
+    expect(b.roomPeers("Game1")).toEqual([]);
+  });
 });
 
 describe("reply hand-off between tabs", () => {

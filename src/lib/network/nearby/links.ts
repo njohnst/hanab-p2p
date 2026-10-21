@@ -248,7 +248,11 @@ function isObject(value: unknown): value is Obj {
 }
 
 const isId = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 64;
-const isRoom = (value: unknown): value is string =>
+/**
+ * A room id other tabs accept. Lists carrying anything else are rejected whole, so this tab never
+ * announces one (a single over-long game id would otherwise freeze every room's presence).
+ */
+export const isRoom = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= 128;
 const isSeq = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0;
 const isListOf = (value: unknown, check: (item: unknown) => boolean): value is string[] =>
@@ -479,7 +483,7 @@ export class LinkManager implements NearbyApi {
 
   async createInvite(options: { gameId?: string | null; origin?: string } = {}): Promise<NearbyInvite> {
     const link = this.newLink("invite", false);
-    link.announcedGame = options.gameId ?? null;
+    link.announcedGame = isRoom(options.gameId) ? options.gameId : null;
     const token = this.randomHex(4);
     let url: string;
     try {
@@ -598,7 +602,9 @@ export class LinkManager implements NearbyApi {
 
   /** The rooms this tab is in: announced to every linked tab. */
   setRooms(roomIds: string[]) {
-    const rooms = Array.from(new Set(roomIds)).sort().slice(0, MAX_LISTED);
+    const rooms = Array.from(new Set(roomIds.filter(isRoom)))
+      .sort()
+      .slice(0, MAX_LISTED);
     if (isEqual(rooms, this.rooms)) return;
     this.rooms = rooms;
     this.broadcast({ t: "rooms", rooms, seq: ++this.seq });
