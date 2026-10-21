@@ -10,16 +10,20 @@ import { Modal } from "~/components/ui/modal";
 import Txt, { TxtSize } from "~/components/ui/txt";
 import UserPreferencesDialog from "~/components/userPreferencesDialog";
 import { useGame } from "~/hooks/game";
+import { useNetworkMode } from "~/hooks/networkMode";
 import { UserPreferences, useUserPreferences } from "~/hooks/userPreferences";
 import { logFailedPromise } from "~/lib/errors";
 import { GameMode } from "~/lib/state";
 
 interface Props {
   onCloseArea: () => void;
+  /** Nearby mode: open the invitation dialog, owned by the game so that it outlives this menu. */
+  onInviteNearby?: () => void;
 }
 
 export default function MenuArea(props: Props) {
-  const { onCloseArea } = props;
+  const { onCloseArea, onInviteNearby } = props;
+  const nearby = useNetworkMode() === "nearby";
 
   const [showRules, setShowRules] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -73,7 +77,7 @@ export default function MenuArea(props: Props) {
                 className="mb3 w-100"
                 size={ButtonSize.MEDIUM}
                 text={t("invitePlayers")}
-                onClick={() => setShowInvite(true)}
+                onClick={() => (nearby && onInviteNearby ? onInviteNearby() : setShowInvite(true))}
               />
             )}
             <Button className="mb3 w-100" size={ButtonSize.MEDIUM} text={t("userPreferences")} onClick={onPrefClick} />

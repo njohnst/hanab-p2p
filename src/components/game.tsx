@@ -8,6 +8,7 @@ import GameBoard from "~/components/gameBoard";
 import Lobby from "~/components/lobby";
 import Logs from "~/components/logs";
 import MenuArea from "~/components/menuArea";
+import { NearbyInviteModal } from "~/components/nearbyInvite";
 import PlayersBoard from "~/components/playersBoard";
 import ReplayViewer from "~/components/replayViewer";
 import RollbackArea from "~/components/rollbackArea";
@@ -66,6 +67,11 @@ export function Game(props: Props) {
   const [displayStats, setDisplayStats] = useState(false);
   const [reachableScore, setReachableScore] = useState<number>(null);
   const [interturn, setInterturn] = useState(false);
+  /**
+   * The nearby invitation dialog opened from the menu. Its state lives here, not in MenuArea: the
+   * menu closes whenever a turn is played, which would cancel an invitation mid-handshake.
+   */
+  const [invitingNearby, setInvitingNearby] = useState(false);
   const { playerId } = useSession();
   const [, setGameId] = useLocalStorage("gameId", null);
   const [selectedArea, selectArea] = useState<ISelectedArea>({
@@ -444,6 +450,17 @@ export function Game(props: Props) {
    */
   useEffect(() => {
     function checkKey(event: KeyboardEvent) {
+      // Arrow keys in a text field, a select or an open dialog (e.g. pasting a nearby reply) are not for the board.
+      const target = event.target as HTMLElement | null;
+      if (
+        event.defaultPrevented ||
+        target?.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName) ||
+        document.body.classList.contains("ReactModal__Body--open")
+      ) {
+        return;
+      }
+
       const cursor = replay.cursor;
 
       // left arrow: if hidden, display replay mode
@@ -506,7 +523,16 @@ export function Game(props: Props) {
           <GameBoard onMenuClick={onMenuClick} onRollbackClick={onRollbackClick} />
         </div>
         <div className="flex flex-column bg-black-50 bb b--yellow ph6.5-m">
-          {selectedArea.type === ActionAreaType.MENU && <MenuArea onCloseArea={onCloseArea} />}
+          {selectedArea.type === ActionAreaType.MENU && (
+            <MenuArea
+              onCloseArea={onCloseArea}
+              onInviteNearby={() => {
+                onCloseArea();
+                setInvitingNearby(true);
+              }}
+            />
+          )}
+          {invitingNearby && <NearbyInviteModal gameId={game.id} onClose={() => setInvitingNearby(false)} />}
 
           {game.status === IGameStatus.LOBBY && (
             <Lobby onAddBot={onAddBot} onJoinGame={onJoinGame} onStartGame={onStartGame} />
