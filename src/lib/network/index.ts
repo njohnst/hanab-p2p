@@ -41,9 +41,21 @@ export type {
   Rejection,
   RejectionReason,
 } from "./types";
-export type { NearbyApi, NearbyCode, NearbyErrorReason, NearbyInvite, NearbyLink, NearbyReply } from "./nearby/types";
+export type {
+  NearbyApi,
+  NearbyCode,
+  NearbyDiagnostics,
+  NearbyDiagnosticsSource,
+  NearbyErrorReason,
+  NearbyInvite,
+  NearbyLink,
+  NearbyReply,
+} from "./nearby/types";
 export { isNearbyError, NearbyError } from "./nearby/types";
 export { parseNearbyText } from "./nearby/codec";
+/** The "Connection details" of an invitation or a reply (NearbyInvite / NearbyReply diagnostics()). */
+export { checkCounts, formatReport, statusOf } from "./nearby/diagnostics";
+export type { ReportEnvironment } from "./nearby/diagnostics";
 
 let browserNetwork: BrowserNetwork | null = null;
 let browserMode: NetworkMode | null = null;

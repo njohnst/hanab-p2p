@@ -455,8 +455,22 @@ button {
   border: 1px dashed var(--color-lavender);
 }
 
-.nearby-link summary {
+.nearby-link summary,
+.nearby-details summary {
   list-style-position: inside;
+}
+
+/* The connection details report: plain text, small, wrapped (mDNS names and IPv6 are long). */
+.nearby-details-report {
+  max-height: 40vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #ccd;
+  background: rgba(0, 0, 0, 0.3);
 }
 
 /* The camera preview: a square showing the centred part of the frame, which is what is decoded. */

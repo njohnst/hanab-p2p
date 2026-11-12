@@ -2,6 +2,7 @@ import classnames from "classnames";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import NearbyCode from "~/components/nearbyCode";
+import NearbyDetails from "~/components/nearbyDetails";
 import QrScanner from "~/components/qrScanner";
 import Button, { ButtonSize } from "~/components/ui/button";
 import { Select } from "~/components/ui/forms";
@@ -84,6 +85,8 @@ function InviteSession(props: Props & { onRestart: () => void }) {
   const [origins, setOrigins] = useState<InviteOrigins>(null);
   const [shownOrigin, setShownOrigin] = useState<string>(null);
   const [notice, setNotice] = useState<string>(null);
+  /** The invitation whose connection details are shown: the latest made, or whose reply was scanned. */
+  const [details, setDetails] = useState<Invite>(null);
 
   const mountedRef = useRef(true);
   const startedRef = useRef(false);
@@ -163,6 +166,7 @@ function InviteSession(props: Props & { onRestart: () => void }) {
           return;
         }
         createdRef.current.set(invite, Date.now());
+        setDetails(invite);
         setPhase({ name: "waiting", invite });
         follow(invite, Date.now());
       },
@@ -198,6 +202,7 @@ function InviteSession(props: Props & { onRestart: () => void }) {
         if (!mountedRef.current) return true;
 
         setNotice(null);
+        setDetails(invite);
         repliedRef.current.add(invite);
         if (!createdRef.current.has(invite)) {
           // Another invitation of this tab (another dialog's, which owns it): follow it here too.
@@ -324,6 +329,8 @@ function InviteSession(props: Props & { onRestart: () => void }) {
           </section>
         </div>
       )}
+
+      {phase.name !== "connected" && <NearbyDetails className="mt3" open={phase.name === "failed"} source={details} />}
     </div>
   );
 }

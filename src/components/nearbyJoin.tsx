@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import CopyButton from "~/components/copyButton";
 import NearbyCode from "~/components/nearbyCode";
+import NearbyDetails from "~/components/nearbyDetails";
 import QrScanner from "~/components/qrScanner";
 import Button, { ButtonSize } from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
@@ -125,6 +126,8 @@ export function NearbyAnswer(props: AnswerProps) {
   const router = useRouter();
   const [phase, setPhase] = useState<AnswerPhase>({ name: "preparing" });
   const replyRef = useRef<NearbyReply>(null);
+  /** Kept after a failure: its connection details are what helps then. */
+  const [details, setDetails] = useState<NearbyReply>(null);
 
   // Read when needed, so that neither restarts the answer.
   const routerRef = useRef(router);
@@ -152,6 +155,7 @@ export function NearbyAnswer(props: AnswerProps) {
       }
 
       replyRef.current = reply;
+      setDetails(reply);
       setPhase({ name: "showing", url: reply.url });
 
       const { gameId } = await reply.connected;
@@ -211,6 +215,10 @@ export function NearbyAnswer(props: AnswerProps) {
           <Txt className="light-red tc mb3" role="alert" value={t(phase.key)} />
           <Button primary size={ButtonSize.SMALL} text={t("nearby.answer.scanAnother")} onClick={onScanAnother} />
         </>
+      )}
+
+      {(phase.name === "showing" || phase.name === "failed") && (
+        <NearbyDetails className="mt3" open={phase.name === "failed"} source={details} />
       )}
     </div>
   );

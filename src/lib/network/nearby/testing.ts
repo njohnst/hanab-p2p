@@ -152,6 +152,8 @@ export class FakePeerConnection extends EventTarget implements PeerConnectionLik
   partner: FakePeerConnection | null = null;
   closed = false;
   offersCreated = 0;
+  /** getStats() calls (the connection details read them about every second while connecting). */
+  statsCalls = 0;
   /** Data channels created here, and those announced by the other side. */
   readonly channels: FakeDataChannel[] = [];
   readonly remoteCandidates: IceCandidateLike[] = [];
@@ -222,6 +224,57 @@ export class FakePeerConnection extends EventTarget implements PeerConnectionLik
     this.connectionState = "closed";
     this.iceConnectionState = "closed";
     this.channels.forEach((channel) => channel.close());
+  }
+
+  /**
+   * Chrome-like statistics: a candidate pair per local and remote candidate, whose state and check
+   * counts follow the connection's state, and the transport. Throws once closed, like Chrome.
+   */
+  async getStats(): Promise<Map<string, Record<string, unknown>>> {
+    this.statsCalls++;
+    if (this.closed) throw new Error("InvalidStateError: closed");
+    const report = new Map<string, Record<string, unknown>>();
+    const fieldsOf = (value: string) => {
+      const fields = value.replace(/^(?:a=)?candidate:/, "").split(/\s+/);
+      return { protocol: fields[2].toLowerCase(), address: fields[4], port: Number(fields[5]) };
+    };
+    const remote = [
+      ...(this.remoteDescription?.sdp.match(/^a=candidate:.*$/gm) ?? []),
+      ...this.remoteCandidates.map((candidate) => candidate.candidate),
+    ];
+    const state = this.connectionState;
+    const pairState = { connected: "succeeded", failed: "failed", connecting: "in-progress" }[state] ?? "waiting";
+    const checks = { connected: [2, 2], failed: [5, 0], connecting: [3, 0] }[state] ?? [0, 0];
+    let selected: string | null = null;
+    this.gathered.forEach((local, l) => {
+      report.set(`L${l}`, { id: `L${l}`, type: "local-candidate", candidateType: "host", ...fieldsOf(local) });
+      remote.forEach((value, r) => {
+        if (l === 0)
+          report.set(`R${r}`, { id: `R${r}`, type: "remote-candidate", candidateType: "host", ...fieldsOf(value) });
+        const id = `P${l}-${r}`;
+        if (state === "connected" && !selected) selected = id;
+        report.set(id, {
+          id,
+          type: "candidate-pair",
+          localCandidateId: `L${l}`,
+          remoteCandidateId: `R${r}`,
+          state: pairState,
+          nominated: selected === id,
+          requestsSent: checks[0],
+          responsesReceived: checks[1],
+          requestsReceived: checks[1],
+          responsesSent: checks[1],
+          currentRoundTripTime: state === "connected" ? 0.004 : undefined,
+        });
+      });
+    });
+    report.set("T", {
+      id: "T",
+      type: "transport",
+      dtlsState: state === "connected" ? "connected" : state === "failed" ? "failed" : "new",
+      selectedCandidatePairId: selected ?? undefined,
+    });
+    return report;
   }
 
   private sdp(type: "offer" | "answer"): string {

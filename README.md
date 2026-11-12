@@ -120,6 +120,17 @@ you leave or reload the page, and pull-down-to-refresh is turned off.
 - **Scan within 10 minutes**: an invitation expires after that. Once the reply is scanned, the devices
   have 20 seconds to connect.
 
+### If the devices don't connect
+
+- Keep the phones about 20–30 cm apart while scanning. On recent Android phones, holding two phones
+  together starts **Tap to Share**, which offers to swap contact cards and can disturb the connection;
+  it can be turned off in Settings → Google → Quick Share → Tap to Share.
+- Under each QR code, **Connection details** shows which network addresses this device offered, the
+  other device's, and how many connection checks were answered. It opens by itself after a failure;
+  **Copy** gives a short text report to send to whoever helps you (it includes the device's local
+  network addresses). On the guest's screen its status line is the only sign that the connection
+  failed, since the guest keeps waiting for the inviter.
+
 A tab stays in nearby mode, reloads included, until you tap **Play online instead**. In this mode
 players join by scanning: game links and public rooms are for online play, and games are always
 private. Opening a game you played nearby from an online tab offers **Switch to nearby play**.

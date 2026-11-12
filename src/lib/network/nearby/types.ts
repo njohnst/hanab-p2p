@@ -85,8 +85,185 @@ export interface NearbyLink {
   via: "invite" | "mesh";
 }
 
+/* ------------------------------------------------------------------ */
+/* Connection diagnostics (./diagnostics.ts)                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * What an ICE candidate's address is (see addressKind in ./diagnostics.ts):
+ *
+ * ipv4-private      - 10/8, 172.16/12, 192.168/16: a LAN (a hotspot is often 192.168.x or 10.x).
+ * ipv4-cgnat        - 100.64/10: carrier-grade NAT (mobile data), or some hotspots and VPNs.
+ * ipv4-link-local   - 169.254/16: no DHCP answer on that interface.
+ * ipv4-loopback     - 127/8.
+ * ipv4-public       - any other unicast IPv4.
+ * ipv4-other        - 0/8, multicast, reserved, broadcast.
+ * ipv6-global       - 2000::/3.
+ * ipv6-unique-local - fc00::/7.
+ * ipv6-link-local   - fe80::/10.
+ * ipv6-loopback     - ::1.
+ * ipv6-other        - any other IPv6 (unspecified, multicast, IPv4-mapped...).
+ * mdns              - "<uuid>.local": the browser hides the address (no camera or microphone permission).
+ * hostname          - another host name.
+ * unknown           - empty, or not an address.
+ */
+export type NearbyAddressKind =
+  | "ipv4-private"
+  | "ipv4-cgnat"
+  | "ipv4-link-local"
+  | "ipv4-loopback"
+  | "ipv4-public"
+  | "ipv4-other"
+  | "ipv6-global"
+  | "ipv6-unique-local"
+  | "ipv6-link-local"
+  | "ipv6-loopback"
+  | "ipv6-other"
+  | "mdns"
+  | "hostname"
+  | "unknown";
+
+/** An ICE candidate: an address where a device may be reached. */
+export interface NearbyCandidate {
+  /** "udp" or "tcp" (lowercase). */
+  protocol: string;
+  /** IP address, "<uuid>.local" (mDNS), a host name, or "" when the browser doesn't say. */
+  address: string;
+  /** null when unknown. */
+  port: number | null;
+  /** "host", "srflx", "prflx" or "relay" ("" when unknown). */
+  type: string;
+  kind: NearbyAddressKind;
+}
+
+/**
+ * Why a candidate this device gathered is not in its code: the codec's reasons (see
+ * CandidateLeftOut in ./codec.ts) or "late" (gathered after the code was made).
+ */
+export type NearbyLeftOutReason =
+  | "unreadable"
+  | "rtcp"
+  | "not-host"
+  | "active-tcp"
+  | "address"
+  | "duplicate"
+  | "limit"
+  | "late";
+
+/** A candidate this device gathered. */
+export interface NearbyLocalCandidate extends NearbyCandidate {
+  /** TCP candidates: "active", "passive" or "so"; null otherwise. */
+  tcpType: string | null;
+  /** When it was gathered (ms since the start); null when only seen in the local description. */
+  atMs: number | null;
+  /** In this device's code (false until the code is made). */
+  inCode: boolean;
+  /** Why the code leaves it out; null when it carries it, or before the code is made. */
+  leftOut: NearbyLeftOutReason | null;
+}
+
+/** An entry of the timeline: what changed, when. */
+export interface NearbyTimelineEntry {
+  /** Milliseconds since the start. */
+  atMs: number;
+  /**
+   * gathering  - iceGatheringState ("gathering", "complete"), or "timeout" when the code was made
+   *              before gathering completed;
+   * ice        - iceConnectionState ("checking", "connected", "failed"...);
+   * connection - connectionState;
+   * channel    - the data channel ("open", "closed");
+   * code       - this device's code was made ("<carried> of <gathered>");
+   * remote     - the other device's code was read: the invitation (guest) or the applied reply
+   *              (inviter) ("<n> addresses");
+   * link       - "open": the other tab said hi;
+   * closed     - closed, with the NearbyErrorReason ("failed", "timeout", "cancelled"...).
+   */
+  event: "gathering" | "ice" | "connection" | "channel" | "code" | "remote" | "link" | "closed";
+  value: string;
+}
+
+/** An ICE candidate pair, from RTCPeerConnection.getStats(). */
+export interface NearbyCandidatePair {
+  /** "frozen", "waiting", "in-progress", "succeeded" or "failed". */
+  state: string;
+  nominated: boolean;
+  /** The pair the connection uses. */
+  selected: boolean;
+  /** null when the stats don't name it. */
+  local: NearbyCandidate | null;
+  remote: NearbyCandidate | null;
+  /** Connectivity checks sent, and the answers they got. */
+  requestsSent: number;
+  responsesReceived: number;
+  /** Connectivity checks from the other device, and the answers this one sent. */
+  requestsReceived: number;
+  responsesSent: number;
+  bytesSent: number;
+  bytesReceived: number;
+  /** Seconds; null when unknown. */
+  currentRoundTripTime: number | null;
+}
+
+/**
+ * Where an invitation's or a reply's connection stands, for the "Connection details" readout and
+ * to send to the developer: what each device offered and how far ICE got. A snapshot: get a new
+ * one with diagnostics() or onDiagnostics().
+ */
+export interface NearbyDiagnostics {
+  /** "inviter": this device showed the invitation; "guest": it answered one. */
+  role: "inviter" | "guest";
+  /** When it started (Date.now()). */
+  startedAt: number;
+  /** Milliseconds from the start to this snapshot (frozen once the link opened or closed). */
+  elapsedMs: number;
+  /**
+   * preparing  - gathering this device's addresses;
+   * waiting    - this device's code is shown (inviter: no reply yet; guest: until the link opens);
+   * connecting - the inviter applied the reply;
+   * open       - linked;
+   * closed     - given up before or after opening: see `closed`.
+   */
+  stage: "preparing" | "waiting" | "connecting" | "open" | "closed";
+  /** Why it closed ("failed", "timeout", "cancelled"...); null while not closed. */
+  closed: NearbyErrorReason | null;
+  /** The RTCPeerConnection's latest states ("" when the browser has none, e.g. connectionState in old Firefox). */
+  iceGatheringState: string;
+  iceConnectionState: string;
+  connectionState: string;
+  /** The DTLS state from the stats ("new", "connecting", "connected", "failed"...); null when unknown. */
+  dtlsState: string | null;
+  /** How ICE gathering ended: "complete", "timeout" (the code was made after ~3s without it), null: not yet. */
+  gatheringEnd: "complete" | "timeout" | null;
+  /** How long gathering took (to its end, or so far). */
+  gatheringMs: number;
+  /** How many candidates this device's code carries; null until it is made. */
+  codeCandidates: number | null;
+  /** Every candidate this device gathered, in order. */
+  local: NearbyLocalCandidate[];
+  /** The candidates of the other device's code; null until known (the inviter learns them from the reply). */
+  remote: NearbyCandidate[] | null;
+  timeline: NearbyTimelineEntry[];
+  /** Timeline entries dropped in the middle (the first and the latest ones are kept). */
+  timelineDropped: number;
+  /** The latest candidate pairs (getStats, about every second until the link opens or closes): kept once closed. */
+  pairs: NearbyCandidatePair[];
+  /** When `pairs` were read (ms since the start); null: never. */
+  statsAtMs: number | null;
+}
+
+/** Diagnostics of an invitation's or a reply's connection (NearbyInvite and NearbyReply have them). */
+export interface NearbyDiagnosticsSource {
+  /** The current diagnostics. Never throws. */
+  diagnostics(): NearbyDiagnostics;
+  /**
+   * Call `callback` with diagnostics() now (asynchronously) and whenever they change (state changes,
+   * new statistics): about every second while connecting. Returns an unsubscribe function.
+   */
+  onDiagnostics(callback: (diagnostics: NearbyDiagnostics) => void): () => void;
+}
+
 /** An invite this tab shows as a QR code, waiting for its reply. */
-export interface NearbyInvite {
+export interface NearbyInvite extends NearbyDiagnosticsSource {
   /** `<origin><basePath>/nearby/#o=<code>`: the QR code's content. */
   readonly url: string;
   /** Random, echoed by the reply: identifies the invite among this tab's pending ones. */
@@ -108,7 +285,7 @@ export interface NearbyInvite {
 }
 
 /** The reply a guest shows as a QR code to the inviting device. */
-export interface NearbyReply {
+export interface NearbyReply extends NearbyDiagnosticsSource {
   /** `<origin><basePath>/nearby/#a=<code>`: the QR code's content. */
   readonly url: string;
   /**

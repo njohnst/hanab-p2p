@@ -368,6 +368,27 @@ are several. Other hosts, `next dev` included, don't answer it: the invitation t
 localhost origin and warns that other devices can't open its link (scanning it from the app still
 works).
 
+### Connection details
+
+Every QR link records how it went (`nearby/diagnostics.ts`, `DiagnosticsRecorder`), exposed as
+`diagnostics()` / `onDiagnostics()` on `NearbyInvite` and `NearbyReply` and shown, folded, under both
+QR codes (`components/nearbyDetails.tsx`):
+
+- the host candidates this device gathered (`icecandidate` events and the local description), which
+  of them its code carries and why the others are left out (the codec's reasons, or gathered after the
+  code was made), and whether gathering completed or hit the ~3s cap;
+- the other device's candidates, from its code;
+- a timeline of state changes (gathering, ICE, connection, data channel, code made, other code read,
+  link open, closed and why), at most 60 entries;
+- the ICE candidate pairs from `getStats()` (state, selected, checks sent and answered both ways, round
+  trip), read every second from the moment the other device's code is known until the link opens or
+  closes; the last reading is kept, since a closed connection has no statistics.
+
+Addresses are classified (private IPv4, carrier-grade NAT, link-local, IPv6 global or unique-local,
+an mDNS name hiding the address...). **Copy** produces a plain-text report in English with the browser,
+the page, the camera permission and the network mode, meant to be sent to the developer: it shows
+whether each side offered an address on the shared network and whether any check was answered.
+
 ### Limits
 
 - Reloading a page, or a phone killing a background tab, ends that tab's links: any connected player

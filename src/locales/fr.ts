@@ -74,6 +74,19 @@ export const fr = {
     switching: "Passage en mode proximité…",
     connecting: "Connexion…",
     copyLinkSummary: "Impossible de scanner ? Copier le lien",
+    details: {
+      title: "Détails de la connexion",
+      note:
+        "Si les appareils ne se connectent pas, copie ceci et envoie-le à qui t'aide. Cela contient les adresses de cet appareil sur le réseau local.",
+      status: {
+        preparing: "recherche des adresses de cet appareil",
+        waiting: "en attente de l'autre appareil",
+        checking: "vérifications réussies : {{answered}} sur {{sent}}",
+        connected: "connecté",
+        failed: "échec",
+        stopped: "arrêtée",
+      },
+    },
     noConnection:
       "Les appareils n'ont pas pu se connecter. Sont-ils sur le même Wi-Fi ? Certains réseaux invités isolent les appareils : le partage de connexion d'un téléphone fonctionne à la place.",
     noWebrtc: "Ce navigateur ne peut pas se connecter aux appareils à proximité. Essaie un autre navigateur.",

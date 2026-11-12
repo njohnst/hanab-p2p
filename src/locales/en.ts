@@ -79,6 +79,19 @@ export const en = {
     switching: "Switching to nearby mode…",
     connecting: "Connecting…",
     copyLinkSummary: "Can't scan it? Copy the link",
+    details: {
+      title: "Connection details",
+      note:
+        "If the devices don't connect, copy this and send it to whoever helps you. It includes this device's addresses on the local network.",
+      status: {
+        preparing: "finding this device's addresses",
+        waiting: "waiting for the other device",
+        checking: "checks answered: {{answered}} of {{sent}}",
+        connected: "connected",
+        failed: "failed",
+        stopped: "stopped",
+      },
+    },
     noConnection:
       "The devices could not connect. Are they on the same Wi-Fi? Some guest networks keep devices apart: a phone's hotspot works instead.",
     noWebrtc: "This browser can't connect to nearby devices. Try another browser.",

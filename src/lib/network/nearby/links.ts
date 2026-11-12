@@ -54,6 +54,7 @@
  */
 import { isEqual } from "lodash";
 import { buildSdp, CompactDescription, fromCode, nearbyUrl, parseNearbyText, parseSdp, toCode } from "./codec";
+import { DiagnosticsRecorder, STATS_INTERVAL_MS, StatsReportLike } from "./diagnostics";
 import {
   isNearbyError,
   NearbyApi,
@@ -100,6 +101,8 @@ export interface LinkTimings {
   meshRetryMaxMs: number;
   /** How long a replaced link is kept (by the tab with the smaller id) before being closed. */
   supersededGraceMs: number;
+  /** How often a QR link's connection statistics are read while it connects (Connection details). */
+  statsIntervalMs: number;
 }
 
 export const DEFAULT_LINK_TIMINGS: LinkTimings = {
@@ -111,6 +114,7 @@ export const DEFAULT_LINK_TIMINGS: LinkTimings = {
   meshRetryMs: 5000,
   meshRetryMaxMs: 80000,
   supersededGraceMs: 5000,
+  statsIntervalMs: STATS_INTERVAL_MS,
 };
 
 /* ------------------------------------------------------------------ */
@@ -147,6 +151,8 @@ export interface PeerConnectionLike extends EventTarget {
   setLocalDescription(description: { type?: string; sdp?: string }): Promise<void>;
   setRemoteDescription(description: { type: "offer" | "answer"; sdp: string }): Promise<void>;
   addIceCandidate(candidate: IceCandidateLike): Promise<void>;
+  /** For the connection details (./diagnostics.ts) only. */
+  getStats?(): Promise<StatsReportLike>;
   close(): void;
 }
 
@@ -386,6 +392,8 @@ interface Link {
   cleanup: Array<() => void>;
   parts: Map<string, Assembly>;
   mesh: MeshSignaling | null;
+  /** QR links: what each device offered and how far ICE got (the "Connection details"). */
+  diagnostics: DiagnosticsRecorder | null;
   onOpen: ((link: Link) => void) | null;
   onClose: ((reason: NearbyErrorReason) => void) | null;
 }
@@ -483,6 +491,7 @@ export class LinkManager implements NearbyApi {
 
   async createInvite(options: { gameId?: string | null; origin?: string } = {}): Promise<NearbyInvite> {
     const link = this.newLink("invite", false);
+    const diagnostics = this.diagnose(link, "inviter");
     link.announcedGame = isRoom(options.gameId) ? options.gameId : null;
     const token = this.randomHex(4);
     let url: string;
@@ -494,6 +503,7 @@ export class LinkManager implements NearbyApi {
       await this.gathered(link);
       this.ensureLive(link);
       const compact = parseSdp(link.pc.localDescription, token);
+      diagnostics.codeMade(compact.candidates.length);
       url = nearbyUrl("invite", toCode(compact), options.origin ?? this.origin());
       this.rememberOwn(compact);
     } catch (e) {
@@ -526,6 +536,8 @@ export class LinkManager implements NearbyApi {
       cancel: () => {
         if (link.state === "connecting") this.close(link, "cancelled");
       },
+      diagnostics: () => diagnostics.snapshot(),
+      onDiagnostics: (callback) => diagnostics.subscribe(callback),
     };
     pending.invite = invite;
     this.invites.set(token, pending);
@@ -535,17 +547,20 @@ export class LinkManager implements NearbyApi {
   async answerInvite(text: string, options: { origin?: string } = {}): Promise<NearbyReply> {
     const { description } = this.readCode(text, "invite");
     const link = this.newLink("invite", true);
+    const diagnostics = this.diagnose(link, "guest");
     let url: string;
     try {
       link.cleanup.push(listen(link.pc, "datachannel", (event) => this.onDataChannel(link, event)));
       await link.pc.setRemoteDescription(buildSdp(description));
       this.ensureLive(link);
+      diagnostics.remoteKnown(description.candidates, false);
       const answer = await link.pc.createAnswer();
       this.ensureLive(link);
       await link.pc.setLocalDescription(answer);
       await this.gathered(link);
       this.ensureLive(link);
       const compact = parseSdp(link.pc.localDescription, description.token);
+      diagnostics.codeMade(compact.candidates.length);
       url = nearbyUrl("reply", toCode(compact), options.origin ?? this.origin());
       this.rememberOwn(compact);
     } catch (e) {
@@ -563,6 +578,8 @@ export class LinkManager implements NearbyApi {
       cancel: () => {
         if (link.state === "connecting") this.close(link, "cancelled");
       },
+      diagnostics: () => diagnostics.snapshot(),
+      onDiagnostics: (callback) => diagnostics.subscribe(callback),
     };
   }
 
@@ -720,6 +737,7 @@ export class LinkManager implements NearbyApi {
     }
     // The await may have seen it close (expiry, cancel(), pagehide).
     if (isClosed(link)) throw new NearbyError(pending.failure ?? "cancelled");
+    link.diagnostics?.remoteKnown(description.candidates, true);
     if (link.state === "connecting") {
       this.later(link, this.timings.connectTimeoutMs, () => this.close(link, "timeout"));
     }
@@ -747,6 +765,21 @@ export class LinkManager implements NearbyApi {
       );
       timer = this.timers.setTimeout(done, this.timings.gatherTimeoutMs);
     });
+  }
+
+  /** Follow a QR link's connection for its Connection details (./diagnostics.ts). */
+  private diagnose(link: Link, role: "inviter" | "guest"): DiagnosticsRecorder {
+    link.diagnostics = new DiagnosticsRecorder(
+      role,
+      link.pc,
+      {
+        now: this.now,
+        setInterval: (callback, ms) => this.timers.setInterval(() => this.guard(callback), ms),
+        clearInterval: (handle) => this.timers.clearInterval(handle),
+      },
+      this.timings.statsIntervalMs
+    );
+    return link.diagnostics;
   }
 
   private ensureLive(link: Link) {
@@ -808,6 +841,7 @@ export class LinkManager implements NearbyApi {
       cleanup: [],
       parts: new Map(),
       mesh: null,
+      diagnostics: null,
       onOpen: null,
       onClose: null,
     };
@@ -862,6 +896,7 @@ export class LinkManager implements NearbyApi {
   private onChannelOpen(link: Link) {
     if (link.state === "closed" || link.channelOpen) return;
     link.channelOpen = true;
+    link.diagnostics?.channelOpen();
     link.lastHeard = this.now();
     this.sendFrame(link, this.hiMessage(link));
   }
@@ -940,6 +975,7 @@ export class LinkManager implements NearbyApi {
     const onOpen = link.onOpen;
     link.onOpen = null;
     link.onClose = null;
+    link.diagnostics?.opened();
     const roomsChanged = this.updatePeer(peer, message, false);
     if (onOpen) this.guard(() => onOpen(link));
     if (isNew || roomsChanged) this.notifyWatchers();
@@ -975,6 +1011,8 @@ export class LinkManager implements NearbyApi {
     link.cleanup = [];
     link.parts.clear();
     this.links_.delete(link);
+    // Before the connection closes: its last statistics can still be read.
+    link.diagnostics?.closing(reason);
     try {
       link.pc.close();
     } catch {

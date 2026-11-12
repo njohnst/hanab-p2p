@@ -86,7 +86,8 @@ function malformed(detail: string): NearbyError {
 /* Addresses                                                           */
 /* ------------------------------------------------------------------ */
 
-function parseIpv4(text: string): Uint8Array | null {
+/** The 4 bytes of a dotted IPv4 address; null when it isn't one. */
+export function parseIpv4(text: string): Uint8Array | null {
   const parts = text.split(".");
   if (parts.length !== 4 || !parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)) {
     return null;
@@ -94,7 +95,8 @@ function parseIpv4(text: string): Uint8Array | null {
   return new Uint8Array(parts.map(Number));
 }
 
-function parseIpv6(text: string): Uint8Array | null {
+/** The 16 bytes of an IPv6 address (brackets and zone ignored); null when it isn't one. */
+export function parseIpv6(text: string): Uint8Array | null {
   // A zone ("%eth0") means nothing to another device.
   let address = text
     .replace(/^\[|\]$/g, "")
@@ -154,6 +156,11 @@ function formatIpv6(bytes: Uint8Array): string {
   const hex = groups.map((group) => group.toString(16));
   if (bestStart < 0) return hex.join(":");
   return `${hex.slice(0, bestStart).join(":")}::${hex.slice(bestStart + bestLength).join(":")}`;
+}
+
+/** A browser's mDNS host name ("<uuid>.local"), which hides the device's address. */
+export function isMdnsName(address: string): boolean {
+  return MDNS_NAME.test(address);
 }
 
 function hexOf(bytes: Uint8Array): string {
@@ -506,28 +513,127 @@ function parseFingerprint(value: string): CompactDescription["fingerprint"] | nu
   return bytes.length === FINGERPRINT_LENGTHS[name] ? { algorithm: name, bytes } : null;
 }
 
+/** The fields of an ICE candidate attribute (see readCandidate). */
+export interface CandidateFields {
+  /** "1" (RTP) or "2" (RTCP). */
+  component: string;
+  /** Lowercase: "udp" or "tcp" in practice. */
+  protocol: string;
+  address: string;
+  /** NaN when not a number. */
+  port: number;
+  /** Lowercase `typ`: "host", "srflx", "prflx" or "relay" ("" when missing). */
+  type: string;
+  /** Lowercase `tcptype` ("active", "passive", "so"); null when missing. */
+  tcpType: string | null;
+}
+
+/**
+ * The fields of a candidate attribute value or icecandidate string
+ * ("candidate:<foundation> <component> <protocol> <priority> <address> <port> typ <type> ...");
+ * null when it is too short to be one.
+ */
+export function readCandidate(value: string): CandidateFields | null {
+  const fields = value
+    .trim()
+    .replace(/^(?:a=)?candidate:/i, "")
+    .split(/\s+/);
+  if (fields.length < 8) return null;
+  const extensions = new Map<string, string>();
+  for (let i = 6; i + 1 < fields.length; i += 2) extensions.set(fields[i].toLowerCase(), fields[i + 1]);
+  return {
+    component: fields[1],
+    protocol: fields[2].toLowerCase(),
+    address: fields[4],
+    port: Number(fields[5]),
+    type: (extensions.get("typ") ?? "").toLowerCase(),
+    tcpType: extensions.get("tcptype")?.toLowerCase() ?? null,
+  };
+}
+
+/**
+ * Why a gathered candidate is not in a code: "unreadable" (not a candidate, or a bad protocol or
+ * port), "rtcp" (component 2), "not-host" (srflx, prflx, relay), "active-tcp" (only connects
+ * out), "address" (an address the code can't carry), "duplicate", "limit" (over MAX_CANDIDATES).
+ */
+export type CandidateLeftOut = "unreadable" | "rtcp" | "not-host" | "active-tcp" | "address" | "duplicate" | "limit";
+
+/** One candidate attribute of a local description, and whether its code carries it (see candidateChoices). */
+export interface CandidateChoice {
+  /** The attribute's value ("candidate:..."). */
+  value: string;
+  /** null: the code carries it. */
+  leftOut: CandidateLeftOut | null;
+}
+
 interface RankedCandidate extends CompactCandidate {
   rank: number;
   order: number;
 }
 
-/** A host candidate worth sending, from a candidate attribute's value; null to skip it. */
-function parseCandidate(value: string, order: number): RankedCandidate | null {
-  const fields = value.replace(/^candidate:/i, "").split(/\s+/);
-  if (fields.length < 8 || fields[1] !== "1") return null;
-  const protocol = fields[2].toLowerCase();
-  const port = Number(fields[5]);
+/** A host candidate worth sending, from a candidate attribute's value; else why it is skipped. */
+function parseCandidate(value: string, order: number): RankedCandidate | CandidateLeftOut {
+  const fields = readCandidate(value);
+  if (!fields) return "unreadable";
+  const { protocol, port } = fields;
+  if (fields.component !== "1") return "rtcp";
   if ((protocol !== "udp" && protocol !== "tcp") || !Number.isInteger(port) || port < 1 || port > 65535) {
-    return null;
+    return "unreadable";
   }
-  const extensions = new Map<string, string>();
-  for (let i = 6; i + 1 < fields.length; i += 2) extensions.set(fields[i].toLowerCase(), fields[i + 1]);
-  if (extensions.get("typ") !== "host") return null;
+  if (fields.type !== "host") return "not-host";
   // Active TCP candidates only connect out (port 9): the remote side cannot use them.
-  if (protocol === "tcp" && extensions.get("tcptype")?.toLowerCase() !== "passive") return null;
-  const address = classifyAddress(fields[4]);
-  if (!address) return null;
+  if (protocol === "tcp" && fields.tcpType !== "passive") return "active-tcp";
+  const address = classifyAddress(fields.address);
+  if (!address) return "address";
   return { protocol, address: address.text, port, rank: address.rank * 2 + (protocol === "tcp" ? 1 : 0), order };
+}
+
+/**
+ * The candidates a code carries, from the candidate attribute values of a description: host
+ * candidates only, without duplicates, the best MAX_CANDIDATES (IPv4 and mDNS first, then global
+ * IPv6 and host names, then link-local and loopback, UDP before TCP). `choices` says, for each
+ * value in order, whether it is carried and why not.
+ */
+function selectCandidates(values: string[]): { chosen: CompactCandidate[]; choices: CandidateChoice[] } {
+  const seen = new Set<string>();
+  const usable: RankedCandidate[] = [];
+  const choices = values.map(
+    (value, order): CandidateChoice => {
+      const candidate = parseCandidate(value, order);
+      if (typeof candidate === "string") return { value, leftOut: candidate };
+      const key = `${candidate.protocol} ${candidate.address} ${candidate.port}`;
+      if (seen.has(key)) return { value, leftOut: "duplicate" };
+      seen.add(key);
+      usable.push(candidate);
+      return { value, leftOut: null };
+    }
+  );
+  usable.sort((a, b) => a.rank - b.rank || a.order - b.order);
+  usable.slice(MAX_CANDIDATES).forEach((candidate) => {
+    choices[candidate.order] = { ...choices[candidate.order], leftOut: "limit" };
+  });
+  return {
+    chosen: usable.slice(0, MAX_CANDIDATES).map(({ protocol, address, port }) => ({ protocol, address, port })),
+    choices,
+  };
+}
+
+/** The data channel's media section (where the candidates are), or null. */
+function mediaSection(sections: SdpSection[]): SdpSection | null {
+  return sections.find((section) => section.media && section.media.startsWith("application ")) ?? null;
+}
+
+function candidateValues(media: SdpSection): string[] {
+  return media.attributes.filter(([key]) => key === "candidate").map(([, value]) => value);
+}
+
+/**
+ * Every candidate attribute of a local description's data channel section, in order, and whether
+ * the code parseSdp makes of it carries it (connection diagnostics). [] without such a section.
+ */
+export function candidateChoices(description: { sdp?: string | null } | null): CandidateChoice[] {
+  const media = mediaSection(sectionsOf(description?.sdp || ""));
+  return media ? selectCandidates(candidateValues(media)).choices : [];
 }
 
 /**
@@ -542,7 +648,7 @@ export function parseSdp(
   const type = description?.type;
   if (type !== "offer" && type !== "answer") throw malformed("description type");
   const sections = sectionsOf(description.sdp || "");
-  const media = sections.find((section) => section.media && section.media.startsWith("application "));
+  const media = mediaSection(sections);
   if (!media) throw malformed("no data channel section");
   const attribute = (name: string) =>
     media.attributes.find(([key]) => key === name)?.[1] ?? sections[0].attributes.find(([key]) => key === name)?.[1];
@@ -560,20 +666,7 @@ export function parseSdp(
     .find(Boolean);
   if (!fingerprint) throw malformed("no usable fingerprint");
 
-  const seen = new Set<string>();
-  const candidates = media.attributes
-    .filter(([key]) => key === "candidate")
-    .map(([, value], i) => parseCandidate(value, i))
-    .filter((candidate): candidate is RankedCandidate => {
-      if (!candidate) return false;
-      const key = `${candidate.protocol} ${candidate.address} ${candidate.port}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => a.rank - b.rank || a.order - b.order)
-    .slice(0, MAX_CANDIDATES)
-    .map(({ protocol, address, port }) => ({ protocol, address, port }));
+  const candidates = selectCandidates(candidateValues(media)).chosen;
 
   const compact: CompactDescription = { type, ufrag, pwd, fingerprint, setup, mid, candidates, token };
   checkDescription(compact);
