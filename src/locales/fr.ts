@@ -64,6 +64,13 @@ export const fr = {
     over: "Terminée",
   },
   nearby: {
+    troubleshooting: {
+      title: "Sur Android ? Vérifie l’autorisation Appareils à proximité de Chrome",
+      permission:
+        "Sur les deux téléphones, ouvre les paramètres Android → Applications → Chrome → Autorisations → Appareils à proximité → Autoriser. Si cette autorisation est présente et refusée, elle peut bloquer la connexion sur certaines versions d’Android.",
+      retry:
+        "Recharge ensuite le jeu sur les deux téléphones, échange de nouveaux QR codes et touche Connecter maintenant sur les deux à peu près en même temps.",
+    },
     ready: "Prêt à se connecter",
     connectTogether:
       "Quand les deux téléphones affichent Prêt à se connecter, touchez Connecter maintenant sur les deux à peu près en même temps.",

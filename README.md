@@ -124,6 +124,11 @@ you leave or reload the page, and pull-down-to-refresh is turned off.
 
 ### If the devices don't connect
 
+- **Android / Chrome:** on both phones, check **Android Settings → Apps → Chrome → Permissions →
+  Nearby devices → Allow**. When this permission is listed and denied, it can block nearby connections
+  on some Android versions. Reload the game on both phones and exchange fresh QR codes before retrying.
+  Both connection failure screens show these steps above the retry button.
+
 - Keep the phones about 20–30 cm apart while scanning. On recent Android phones, holding two phones
   together starts **Tap to Share**, which offers to swap contact cards and can disturb the connection;
   it can be turned off in Settings → Google → Quick Share → Tap to Share.

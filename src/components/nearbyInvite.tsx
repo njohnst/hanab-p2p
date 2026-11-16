@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import NearbyCode from "~/components/nearbyCode";
 import NearbyDetails from "~/components/nearbyDetails";
+import NearbyTroubleshooting from "~/components/nearbyTroubleshooting";
 import QrScanner from "~/components/qrScanner";
 import Button, { ButtonSize } from "~/components/ui/button";
 import { Select } from "~/components/ui/forms";
@@ -291,6 +292,7 @@ function InviteSession(props: Props & { onRestart: () => void }) {
       {phase.name === "failed" && (
         <div className="flex flex-column items-center">
           <Txt className="light-red tc mb3" role="alert" value={t(phase.key)} />
+          <NearbyTroubleshooting />
           <Button primary size={ButtonSize.SMALL} text={t("nearby.invite.retry")} onClick={onRestart} />
         </div>
       )}

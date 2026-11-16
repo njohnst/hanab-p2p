@@ -69,6 +69,13 @@ export const en = {
     over: "Finished",
   },
   nearby: {
+    troubleshooting: {
+      title: "On Android? Check Chrome’s Nearby devices permission",
+      permission:
+        "On both phones, open Android Settings → Apps → Chrome → Permissions → Nearby devices → Allow. If this permission is listed and denied, it can block the connection on some Android versions.",
+      retry:
+        "Then reload the game on both phones, exchange fresh QR codes, and tap Connect now on both phones at roughly the same time.",
+    },
     ready: "Ready to connect",
     connectTogether: "Once both phones show Ready to connect, tap Connect now on both phones at roughly the same time.",
     connectNow: "Connect now",

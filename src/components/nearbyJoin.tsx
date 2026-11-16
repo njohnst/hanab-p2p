@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import CopyButton from "~/components/copyButton";
 import NearbyCode from "~/components/nearbyCode";
 import NearbyDetails from "~/components/nearbyDetails";
+import NearbyTroubleshooting from "~/components/nearbyTroubleshooting";
 import QrScanner from "~/components/qrScanner";
 import Button, { ButtonSize } from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
@@ -243,6 +244,7 @@ export function NearbyAnswer(props: AnswerProps) {
       {phase.name === "failed" && (
         <>
           <Txt className="light-red tc mb3" role="alert" value={t(phase.key)} />
+          <NearbyTroubleshooting />
           <Button primary size={ButtonSize.SMALL} text={t("nearby.answer.scanAnother")} onClick={onScanAnother} />
         </>
       )}
