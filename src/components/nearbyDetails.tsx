@@ -26,6 +26,7 @@ function summaryOf(d: NearbyDiagnostics): [string, Record<string, unknown>] {
   if (d.stage === "closed") return ["nearby.details.status.stopped", {}];
   if (d.iceConnectionState === "failed" || d.connectionState === "failed") return ["nearby.details.status.failed", {}];
   if (d.stage === "preparing") return ["nearby.details.status.preparing", {}];
+  if (d.stage === "ready") return ["nearby.ready", {}];
   if (d.remote === null) return ["nearby.details.status.waiting", {}];
   return ["nearby.details.status.checking", checkCounts(d)];
 }

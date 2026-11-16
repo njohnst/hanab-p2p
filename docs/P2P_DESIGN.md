@@ -197,18 +197,24 @@ connect to each other on their own.
 
 ### Handshake (two QR codes)
 
-1. The **inviter** (any player of the game) calls `createInvite({ gameId, origin })`: a new
+1. The **inviter** (any player of the game) calls `createInvite({ gameId, origin, manualStart: true })`: a new
    RTCPeerConnection with `iceServers: []` and an ordered data channel (`hanab`), `createOffer`, then
    waits for ICE gathering to complete (at most 3s; then what was gathered is used). Its compact
    description becomes the **invite URL** `<origin><basePath>/nearby/#o=<code>`, shown as a QR code.
    An invite lasts 10 minutes, and a tab can hold several: each has a random token that its reply
    echoes.
 2. The **guest** scans it, with the phone's own camera app (the URL opens the app, which answers it)
-   or the in-app scanner, and calls `answerInvite(text)`: `setRemoteDescription` (the rebuilt offer),
+   or the in-app scanner, and calls `answerInvite(text, { manualStart: true })`: `setRemoteDescription` (the rebuilt offer
+   without candidates or end-of-candidates),
    `createAnswer`, gather, and shows the **reply URL** `<origin><basePath>/nearby/#a=<code>` as a QR
    code. The reply takes the invitation's origin when the invitation was a URL (see below).
 3. The inviter scans the reply: `acceptReply(text)` finds the pending invite by its token and calls
-   `setRemoteDescription`. The link must then open within 20s. Once the data channel is open, both
+   `setRemoteDescription` without candidates or end-of-candidates. Both screens then offer **Connect now**
+   (the guest first confirms the reply was scanned). Each tap calls `startConnecting()`, releasing the
+   saved remote candidates with `addIceCandidate` and then end-of-candidates. The 20s connection timeout
+   starts on the tap. Taps should be roughly simultaneous so checks overlap. Calls are idempotent; the
+   10-minute invitation expiry still applies. The API retains automatic start when `manualStart` is
+   omitted, and mesh connections remain automatic. Once the data channel is open, both
    sides send `hi`; the inviter's carries the game id, and the guest's page opens that game with the
    router.
 
@@ -431,7 +437,7 @@ Nearby play (all its strings are under `nearby` in `en.ts` and `fr.ts`):
     there are none.
   - Replies it can't use show a message and scanning goes on. Once connected: "Invite another
     player".
-  - Closing it cancels pending invitations, except those whose reply was scanned there.
+  - Closing it cancels pending invitations, except those whose Connect now button was pressed there.
 - Guest (`nearbyJoin.tsx`): after answering, the reply QR code with Cancel; once linked, the game
   opens client-side. A reply scanned there instead of an invitation is applied by this tab, or handed
   to the tab of this browser that holds its invitation.

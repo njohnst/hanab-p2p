@@ -105,6 +105,8 @@ export default function NearbyJoin(props: JoinProps) {
 type AnswerPhase =
   | { name: "preparing" }
   | { name: "showing"; url: string }
+  | { name: "ready" }
+  | { name: "connecting" }
   | { name: "connected" }
   /** `key`: the message (a translation key). */
   | { name: "failed"; key: string };
@@ -135,7 +137,7 @@ export function NearbyAnswer(props: AnswerProps) {
   const onScanAnotherRef = useRef(onScanAnother);
   onScanAnotherRef.current = onScanAnother;
 
-  useKeepAwake(phase.name === "showing");
+  useKeepAwake(phase.name === "showing" || phase.name === "ready" || phase.name === "connecting");
 
   useEffect(() => {
     let active = true;
@@ -148,7 +150,10 @@ export function NearbyAnswer(props: AnswerProps) {
 
       // The reply goes back to the inviting device: on the invitation's origin when it had one.
       const origins = await resolveInviteOrigins();
-      const reply = await nearby.answerInvite(text, { origin: replyOrigin(text, pickInviteOrigin(origins).origin) });
+      const reply = await nearby.answerInvite(text, {
+        manualStart: true,
+        origin: replyOrigin(text, pickInviteOrigin(origins).origin),
+      });
       if (!active) {
         reply.cancel();
         return;
@@ -195,7 +200,7 @@ export function NearbyAnswer(props: AnswerProps) {
           <Txt className="mb2 tc" size={TxtSize.MEDIUM} value={t("nearby.answer.show")} />
           <NearbyCode label={t("nearby.answer.qrLabel")} url={phase.url} />
           <Txt className="lavender tc mt3" size={TxtSize.SMALL} value={t("nearby.answer.hint")} />
-          <Txt aria-live="polite" className="gray tc mt2" role="status" value={t("nearby.answer.waiting")} />
+          <Button primary className="mt3" text={t("nearby.replyScanned")} onClick={() => setPhase({ name: "ready" })} />
           <Button
             outlined
             className="mt3"
@@ -205,6 +210,31 @@ export function NearbyAnswer(props: AnswerProps) {
           />
         </>
       )}
+
+      {phase.name === "ready" && (
+        <div className="flex flex-column items-center tc">
+          <Txt role="status" value={t("nearby.ready")} />
+          <Txt className="mv3 mw6" value={t("nearby.connectTogether")} />
+          <Button
+            primary
+            text={t("nearby.connectNow")}
+            onClick={() => {
+              setPhase({ name: "connecting" });
+              replyRef.current
+                ?.startConnecting()
+                .catch((error) =>
+                  setPhase({ name: "failed", key: answerFailureKey(isNearbyError(error) ? error.reason : "failed") })
+                );
+            }}
+          />
+          <Button
+            className="mt3"
+            text={t("nearby.showReplyAgain")}
+            onClick={() => setPhase({ name: "showing", url: replyRef.current.url })}
+          />
+        </div>
+      )}
+      {phase.name === "connecting" && <Txt role="status" value={t("nearby.connecting")} />}
 
       {phase.name === "connected" && (
         <Txt className="txt-green tc" role="status" value={`✓ ${t("nearby.answer.connected")}`} />
@@ -217,9 +247,10 @@ export function NearbyAnswer(props: AnswerProps) {
         </>
       )}
 
-      {(phase.name === "showing" || phase.name === "failed") && (
-        <NearbyDetails className="mt3" open={phase.name === "failed"} source={details} />
-      )}
+      {(phase.name === "showing" ||
+        phase.name === "ready" ||
+        phase.name === "connecting" ||
+        phase.name === "failed") && <NearbyDetails className="mt3" open={phase.name === "failed"} source={details} />}
     </div>
   );
 }

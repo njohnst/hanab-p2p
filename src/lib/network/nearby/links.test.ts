@@ -570,3 +570,52 @@ describe("reply hand-off between tabs", () => {
     expect(await run(deliverReplyToOtherTab(reply.url, 1500, { createBroadcastChannel: null }))).toBe(false);
   });
 });
+
+describe("manual QR connection start", () => {
+  it.each(["inviter", "guest"])("waits through a long scan, then connects with %s tapping first", async (first) => {
+    const a = tab("a");
+    const b = tab("b");
+    const invite = await run(a.createInvite({ manualStart: true }));
+    const reply = await run(b.answerInvite(invite.url, { manualStart: true }));
+    await settle(60000);
+    const guestPc = lan.connectionsOf("b")[0];
+    expect(guestPc.remoteDescription.sdp).not.toContain("a=candidate:");
+    expect(guestPc.remoteDescription.sdp).not.toContain("a=end-of-candidates");
+    await run(invite.acceptReply(reply.url));
+    await settle(60000);
+    expect(invite.diagnostics().stage).toBe("ready");
+    expect(reply.diagnostics().stage).toBe("ready");
+    expect(open(a)).toEqual([]);
+    const [one, two] = first === "inviter" ? [invite, reply] : [reply, invite];
+    await run(one.startConnecting());
+    await settle(2000);
+    await run(two.startConnecting());
+    await run(invite.connected);
+    await run(reply.connected);
+    expect(open(a)).toEqual(["b"]);
+    const count = guestPc.remoteCandidates.length;
+    await run(reply.startConnecting());
+    expect(guestPc.remoteCandidates).toHaveLength(count);
+  });
+
+  it("starts the failure timeout on the tap, not on scanning the reply", async () => {
+    const a = tab("a");
+    const b = tab("b");
+    const invite = await run(a.createInvite({ manualStart: true }));
+    const reply = await run(b.answerInvite(invite.url, { manualStart: true }));
+    await run(invite.acceptReply(reply.url));
+    await settle(45000);
+    expect(invite.diagnostics().stage).toBe("ready");
+    await run(invite.startConnecting());
+    expect(await rejection(invite.connected, 25000)).toBe("timeout");
+  });
+
+  it("does not release candidates after cancellation", async () => {
+    const a = tab("a");
+    const b = tab("b");
+    const invite = await run(a.createInvite({ manualStart: true }));
+    const reply = await run(b.answerInvite(invite.url, { manualStart: true }));
+    reply.cancel();
+    expect(await rejection(reply.startConnecting())).toBe("cancelled");
+  });
+});

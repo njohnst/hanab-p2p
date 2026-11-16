@@ -265,6 +265,11 @@ export class DiagnosticsRecorder {
     this.startPolling();
   }
 
+  readyToConnect() {
+    this.stage = "ready";
+    this.add("ready", "waiting for Connect now");
+  }
+
   /** The data channel opened. */
   channelOpen() {
     this.add("channel", "open");
@@ -535,6 +540,7 @@ function plural(n: number, word: string): string {
 
 /** The status in a few words: "waiting for the reply", "checking", "failed"... */
 export function statusOf(d: NearbyDiagnostics): string {
+  if (d.stage === "ready") return "ready; waiting for Connect now";
   if (d.stage === "open") return "connected";
   if (d.stage === "closed") return `closed (${d.closed})`;
   if (d.iceConnectionState === "failed" || d.connectionState === "failed") return "failed";

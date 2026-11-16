@@ -84,7 +84,9 @@ internet. The devices talk to each other directly, with no server in between.
    reply, and it helps the devices find each other on some networks.
 3. The other player scans your code with their phone's camera app, or in the app (**Play without
    internet**, then **Scan with the camera**). Their screen then shows a reply code.
-4. Scan the reply in the same dialog. The devices connect and the game opens on their screen.
+4. Scan the reply in the same dialog. On the other phone, tap **The other phone has scanned my reply**.
+5. Once both phones show **Ready to connect**, tap **Connect now** on both at roughly the same time.
+   The game opens on the guest’s screen when connected.
 
 **More players:** invite each one the same way, from any player who is already in: ☰ → **Invite
 players**, or tap the connection status at the top of the game. A new player then connects to
@@ -117,8 +119,8 @@ you leave or reload the page, and pull-down-to-refresh is turned off.
     slash (e.g. `…/hanabi-app/`) or from the home-screen icon.
   - or serve it from a computer on the network (see
     [Self-hosting on a local network](#self-hosting-on-a-local-network)).
-- **Scan within 10 minutes**: an invitation expires after that. Once the reply is scanned, the devices
-  have 20 seconds to connect.
+- **Scan within 10 minutes**: an invitation expires after that. Each phone has 20 seconds to connect
+  after tapping **Connect now**; scanning the codes does not start that timeout.
 
 ### If the devices don't connect
 
@@ -169,14 +171,15 @@ localhost is expected).
    camera**). Open **Can't scan it? Copy the link** and click **Copy**.
 3. Tab B: open `http://localhost:3000/nearby/?as=bob` and paste the link under **Or paste the code or
    link**. Copy the reply link the same way.
-4. Paste the reply in tab A's dialog, in the same paste field under the reply scanner. Tab A says
-   **Connected!** and tab B opens the game.
+4. Paste the reply in tab A's dialog, in the same paste field under the reply scanner. Tab A shows
+   **Ready to connect**. In tab B, confirm that the reply was scanned. Tap **Connect now** in both
+   tabs within a few seconds of each other; tab B then opens the game.
 5. For the mesh, join as Bob, then invite tab C (`/nearby/?as=carol`) from Bob's ☰ → **Invite
    players**. A and C connect by themselves: once Carol takes a seat, A's connection status shows
    3/3 nearby.
 
 Opening the copied reply link in a new tab instead of pasting it tests the hand-off between tabs: it
-says the reply was sent, and tab A connects. The camera, the wake lock and real devices still need a
+says the reply was sent. Return to tab A for **Connect now**. The camera, the wake lock and real devices still need a
 manual pass on phones on one Wi-Fi (see [Self-hosting](#self-hosting-on-a-local-network)).
 
 ### Tests, lint and the static build

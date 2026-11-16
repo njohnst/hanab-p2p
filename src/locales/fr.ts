@@ -64,6 +64,13 @@ export const fr = {
     over: "Terminée",
   },
   nearby: {
+    ready: "Prêt à se connecter",
+    connectTogether:
+      "Quand les deux téléphones affichent Prêt à se connecter, touchez Connecter maintenant sur les deux à peu près en même temps.",
+    connectNow: "Connecter maintenant",
+    replyScanned: "L’autre téléphone a scanné ma réponse",
+    showReplyAgain: "Afficher à nouveau le QR de réponse",
+
     title: "Jouer à proximité, sans internet",
     intro:
       "Les téléphones et ordinateurs connectés au même Wi-Fi, ou au partage de connexion d'un téléphone, peuvent jouer ensemble sans connexion internet. Un joueur de la partie affiche un QR code d'invitation : scanne-le, puis laisse-le scanner le code qui apparaît sur ton écran.",
@@ -175,7 +182,7 @@ export const fr = {
       title: "Réponse à une invitation",
       delivering: "Envoi de la réponse à l'invitation…",
       delivered: "Réponse envoyée à l'onglet qui affiche l'invitation. Retournes-y : tu peux fermer cet onglet.",
-      applied: "Réponse reçue : les appareils se connectent.",
+      applied: "Réponse reçue. Retournez à l’invitation et touchez Connecter maintenant sur les deux téléphones.",
       notDelivered:
         "Cette réponse est destinée à l'appareil qui affiche l'invitation, mais aucune invitation n'est ouverte dans ce navigateur.",
       how: "Sur cet appareil, scanne ce code depuis l'écran d'invitation, ou copie le lien et colle-le là-bas.",

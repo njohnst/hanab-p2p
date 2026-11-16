@@ -69,6 +69,12 @@ export const en = {
     over: "Finished",
   },
   nearby: {
+    ready: "Ready to connect",
+    connectTogether: "Once both phones show Ready to connect, tap Connect now on both phones at roughly the same time.",
+    connectNow: "Connect now",
+    replyScanned: "The other phone has scanned my reply",
+    showReplyAgain: "Show reply QR again",
+
     title: "Play nearby, without internet",
     intro:
       "Phones and computers on the same Wi-Fi, or on a phone's hotspot, can play together with no internet connection. A player in the game shows an invitation QR code: scan it, then let them scan the code that appears on your screen.",
@@ -176,7 +182,7 @@ export const en = {
       title: "Reply to an invitation",
       delivering: "Sending the reply to the invitation…",
       delivered: "Reply sent to the tab showing the invitation. Go back to it: you can close this tab.",
-      applied: "Reply received: the devices are connecting.",
+      applied: "Reply received. Return to the invitation screen and tap Connect now on both phones.",
       notDelivered:
         "This reply is for the device that shows the invitation, but no invitation is open in this browser.",
       how: "On that device, scan this code from the invitation screen, or copy the link and paste it there.",

@@ -674,7 +674,10 @@ export function parseSdp(
 }
 
 /** A standard SDP for setRemoteDescription, rebuilt from a compact description. */
-export function buildSdp(description: CompactDescription): { type: "offer" | "answer"; sdp: string } {
+export function buildSdp(
+  description: CompactDescription,
+  includeCandidates = true
+): { type: "offer" | "answer"; sdp: string } {
   const fingerprint = Array.from(description.fingerprint.bytes, (byte) =>
     byte.toString(16).padStart(2, "0").toUpperCase()
   ).join(":");
@@ -687,13 +690,13 @@ export function buildSdp(description: CompactDescription): { type: "offer" | "an
     "a=msid-semantic: WMS",
     "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
     "c=IN IP4 0.0.0.0",
-    ...description.candidates.map(
+    ...(includeCandidates ? description.candidates : []).map(
       (candidate, i) =>
         `a=candidate:${i + 1} 1 ${candidate.protocol} ${2113937151 - i} ${candidate.address} ${
           candidate.port
         } typ host` + (candidate.protocol === "tcp" ? " tcptype passive" : "")
     ),
-    "a=end-of-candidates",
+    ...(includeCandidates ? ["a=end-of-candidates"] : []),
     `a=ice-ufrag:${description.ufrag}`,
     `a=ice-pwd:${description.pwd}`,
     `a=fingerprint:${description.fingerprint.algorithm} ${fingerprint}`,

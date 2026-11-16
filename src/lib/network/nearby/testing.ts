@@ -216,6 +216,7 @@ export class FakePeerConnection extends EventTarget implements PeerConnectionLik
   async addIceCandidate(candidate: IceCandidateLike) {
     if (!this.remoteDescription) throw new Error("InvalidStateError: no remote description");
     this.remoteCandidates.push(candidate);
+    this.tryConnect();
   }
 
   close() {
@@ -337,6 +338,10 @@ export class FakePeerConnection extends EventTarget implements PeerConnectionLik
     if (!other || other === this || other.closed || other.partner) return;
     if (!other.localType || !other.remoteDescription || other.remoteField("ice-ufrag") !== this.ufrag) return;
 
+    const hasCandidates = (pc: FakePeerConnection) =>
+      /a=candidate:/.test(pc.remoteDescription?.sdp ?? "") ||
+      pc.remoteCandidates.some((candidate) => !!candidate.candidate);
+    if (!hasCandidates(this) || !hasCandidates(other)) return;
     this.partner = other;
     other.partner = this;
     this.setState("connecting");

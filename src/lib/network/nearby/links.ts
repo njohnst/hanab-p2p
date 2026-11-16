@@ -422,6 +422,9 @@ interface PendingInvite {
   /** The reply code applied (an invite takes one reply). */
   answer: string | null;
   failure: NearbyErrorReason | null;
+  manualStart: boolean;
+  description?: CompactDescription;
+  start?: Promise<void>;
 }
 
 interface MeshRetry {
@@ -489,7 +492,9 @@ export class LinkManager implements NearbyApi {
   /* NearbyApi                                                           */
   /* ------------------------------------------------------------------ */
 
-  async createInvite(options: { gameId?: string | null; origin?: string } = {}): Promise<NearbyInvite> {
+  async createInvite(
+    options: { gameId?: string | null; origin?: string; manualStart?: boolean } = {}
+  ): Promise<NearbyInvite> {
     const link = this.newLink("invite", false);
     const diagnostics = this.diagnose(link, "inviter");
     link.announcedGame = isRoom(options.gameId) ? options.gameId : null;
@@ -512,7 +517,14 @@ export class LinkManager implements NearbyApi {
     }
 
     const connected = deferred<NearbyLink>();
-    const pending: PendingInvite = { token, link, invite: null, answer: null, failure: null };
+    const pending: PendingInvite = {
+      token,
+      link,
+      invite: null,
+      answer: null,
+      failure: null,
+      manualStart: !!options.manualStart,
+    };
     link.onOpen = (opened) => {
       this.invites.delete(token);
       connected.resolve(this.describe(opened));
@@ -527,6 +539,12 @@ export class LinkManager implements NearbyApi {
     const invite: NearbyInvite = {
       url,
       token,
+      startConnecting: () => {
+        if (!pending.description) return Promise.reject(new NearbyError("unknown-invite"));
+        return (pending.start ??= pending.manualStart
+          ? this.releaseCandidates(link, pending.description)
+          : Promise.resolve());
+      },
       connected: connected.promise,
       acceptReply: async (text: string) => {
         const { description, code } = this.readCode(text, "reply");
@@ -544,14 +562,14 @@ export class LinkManager implements NearbyApi {
     return invite;
   }
 
-  async answerInvite(text: string, options: { origin?: string } = {}): Promise<NearbyReply> {
+  async answerInvite(text: string, options: { origin?: string; manualStart?: boolean } = {}): Promise<NearbyReply> {
     const { description } = this.readCode(text, "invite");
     const link = this.newLink("invite", true);
     const diagnostics = this.diagnose(link, "guest");
     let url: string;
     try {
       link.cleanup.push(listen(link.pc, "datachannel", (event) => this.onDataChannel(link, event)));
-      await link.pc.setRemoteDescription(buildSdp(description));
+      await link.pc.setRemoteDescription(buildSdp(description, !options.manualStart));
       this.ensureLive(link);
       diagnostics.remoteKnown(description.candidates, false);
       const answer = await link.pc.createAnswer();
@@ -572,8 +590,12 @@ export class LinkManager implements NearbyApi {
     link.onOpen = (opened) => connected.resolve({ peerId: opened.peerId, gameId: opened.remoteGame });
     link.onClose = (reason) => connected.reject(new NearbyError(reason));
     this.later(link, this.timings.inviteTtlMs, () => this.close(link, "timeout"));
+    if (options.manualStart) diagnostics.readyToConnect();
+    let start: Promise<void> | undefined;
     return {
       url,
+      startConnecting: () =>
+        (start ??= options.manualStart ? this.releaseCandidates(link, description) : Promise.resolve()),
       connected: connected.promise,
       cancel: () => {
         if (link.state === "connecting") this.close(link, "cancelled");
@@ -730,16 +752,41 @@ export class LinkManager implements NearbyApi {
     }
     pending.answer = code;
     try {
-      await link.pc.setRemoteDescription(buildSdp(description));
+      await link.pc.setRemoteDescription(buildSdp(description, !pending.manualStart));
+      pending.description = description;
     } catch (e) {
       this.close(link, "failed");
       throw setupFailure(e);
     }
     // The await may have seen it close (expiry, cancel(), pagehide).
     if (isClosed(link)) throw new NearbyError(pending.failure ?? "cancelled");
-    link.diagnostics?.remoteKnown(description.candidates, true);
-    if (link.state === "connecting") {
+    link.diagnostics?.remoteKnown(description.candidates, !pending.manualStart);
+    if (pending.manualStart) link.diagnostics?.readyToConnect();
+    if (!pending.manualStart && link.state === "connecting") {
       this.later(link, this.timings.connectTimeoutMs, () => this.close(link, "timeout"));
+    }
+  }
+
+  /** Withhold candidates and end-of-candidates until the user finishes the QR exchange. */
+  private async releaseCandidates(link: Link, description: CompactDescription): Promise<void> {
+    this.ensureLive(link);
+    if (link.state === "open") return;
+    link.diagnostics?.remoteKnown(description.candidates, true);
+    this.later(link, this.timings.connectTimeoutMs, () => {
+      if (link.state === "connecting") this.close(link, "timeout");
+    });
+    try {
+      const lines = buildSdp(description)
+        .sdp.split("\r\n")
+        .filter((line) => line.startsWith("a=candidate:"));
+      for (const line of lines) {
+        this.ensureLive(link);
+        await link.pc.addIceCandidate({ candidate: line.slice(2), sdpMid: description.mid });
+      }
+      await link.pc.addIceCandidate({ candidate: "", sdpMid: description.mid });
+    } catch (error) {
+      this.close(link, "failed");
+      throw setupFailure(error);
     }
   }
 

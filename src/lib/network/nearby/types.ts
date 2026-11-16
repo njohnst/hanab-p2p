@@ -178,7 +178,7 @@ export interface NearbyTimelineEntry {
    * link       - "open": the other tab said hi;
    * closed     - closed, with the NearbyErrorReason ("failed", "timeout", "cancelled"...).
    */
-  event: "gathering" | "ice" | "connection" | "channel" | "code" | "remote" | "link" | "closed";
+  event: "ready" | "gathering" | "ice" | "connection" | "channel" | "code" | "remote" | "link" | "closed";
   value: string;
 }
 
@@ -219,11 +219,12 @@ export interface NearbyDiagnostics {
   /**
    * preparing  - gathering this device's addresses;
    * waiting    - this device's code is shown (inviter: no reply yet; guest: until the link opens);
-   * connecting - the inviter applied the reply;
+   * ready      - codes exchanged; waiting for the user to start checks;
+   * connecting - connection checks have been started;
    * open       - linked;
    * closed     - given up before or after opening: see `closed`.
    */
-  stage: "preparing" | "waiting" | "connecting" | "open" | "closed";
+  stage: "preparing" | "ready" | "waiting" | "connecting" | "open" | "closed";
   /** Why it closed ("failed", "timeout", "cancelled"...); null while not closed. */
   closed: NearbyErrorReason | null;
   /** The RTCPeerConnection's latest states ("" when the browser has none, e.g. connectionState in old Firefox). */
@@ -271,7 +272,7 @@ export interface NearbyInvite extends NearbyDiagnosticsSource {
   /**
    * Resolves when the guest's tab is linked, rejects (NearbyError) when the
    * invite expires (~10 minutes), is cancelled, or the connection fails or
-   * does not open within ~20s of the reply. Never unhandled.
+   * does not open within ~20s of starting connection checks. Never unhandled.
    */
   readonly connected: Promise<NearbyLink>;
   /**
@@ -280,7 +281,9 @@ export interface NearbyInvite extends NearbyDiagnosticsSource {
    * again is a no-op; another invite's reply rejects with "unknown-invite".
    */
   acceptReply(text: string): Promise<void>;
-  /** Give up waiting (no-op once connected): `connected` rejects with "cancelled". */
+  /** Release the saved remote candidates after the user taps Connect now. Idempotent. */
+  startConnecting(): Promise<void>;
+  /** Give up (no-op once connected): `connected` rejects with "cancelled". */
   cancel(): void;
 }
 
@@ -295,6 +298,8 @@ export interface NearbyReply extends NearbyDiagnosticsSource {
    * closed. Never unhandled.
    */
   readonly connected: Promise<{ peerId: string; gameId: string | null }>;
+  /** Release the saved remote candidates after the user taps Connect now. Idempotent. */
+  startConnecting(): Promise<void>;
   /** Give up (no-op once connected): `connected` rejects with "cancelled". */
   cancel(): void;
 }
@@ -310,14 +315,16 @@ export interface NearbyApi {
    * which networks that block multicast need. `gameId` is announced to the
    * guest once linked; `origin` defaults to the page's origin (give the LAN
    * origin when the page runs on localhost). Rejects with "no-webrtc" or "failed".
+   * With manualStart, scanning only prepares the connection; call startConnecting after both scans.
    */
-  createInvite(options?: { gameId?: string | null; origin?: string }): Promise<NearbyInvite>;
+  createInvite(options?: { gameId?: string | null; origin?: string; manualStart?: boolean }): Promise<NearbyInvite>;
   /**
    * Answer a scanned or pasted invite (URL or code): resolves with the reply
    * to show. Rejects with "malformed", "not-an-invite", "own-invite",
    * "unsupported-version", "no-webrtc" or "failed".
+   * With manualStart, candidates are held until startConnecting; the reply QR remains usable for 10 minutes.
    */
-  answerInvite(text: string, options?: { origin?: string }): Promise<NearbyReply>;
+  answerInvite(text: string, options?: { origin?: string; manualStart?: boolean }): Promise<NearbyReply>;
   /**
    * Apply a scanned or pasted reply to whichever pending invite it answers
    * (matched by token); resolves with that invite once applied (await its

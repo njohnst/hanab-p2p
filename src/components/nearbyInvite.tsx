@@ -52,7 +52,9 @@ type Phase =
   | { name: "starting" }
   /** The invitation is shown; the camera scans for the reply. */
   | { name: "waiting"; invite: Invite }
-  /** A reply was applied: the devices are connecting (at most ~20s). */
+  /** The reply was scanned; wait for the user to start checks. */
+  | { name: "ready"; invite: Invite }
+  /** Connect now was pressed; checks have at most ~20s. */
   | { name: "connecting"; invite: Invite }
   | { name: "connected" }
   /** `key`: the message (a translation key). */
@@ -66,7 +68,7 @@ function reasonOf(error: unknown): NearbyErrorReason {
 }
 
 function phaseInvite(phase: Phase): Invite | null {
-  return phase.name === "waiting" || phase.name === "connecting" ? phase.invite : null;
+  return phase.name === "waiting" || phase.name === "ready" || phase.name === "connecting" ? phase.invite : null;
 }
 
 /**
@@ -92,15 +94,15 @@ function InviteSession(props: Props & { onRestart: () => void }) {
   const startedRef = useRef(false);
   /** The invitations made here, with when: those still pending are cancelled when the session ends... */
   const createdRef = useRef(new Map<Invite, number>());
-  /** ...except those whose reply was scanned here: the guest is waiting, let them connect. */
-  const repliedRef = useRef(new Set<Invite>());
+  /** ...except those whose Connect now button was pressed: let the attempt finish. */
+  const connectingRef = useRef(new Set<Invite>());
 
-  useKeepAwake(phase.name === "waiting" || phase.name === "connecting");
+  useKeepAwake(phase.name === "waiting" || phase.name === "ready" || phase.name === "connecting");
 
   useEffect(() => {
     // The collections themselves never change, only their content.
     const created = createdRef.current;
-    const replied = repliedRef.current;
+    const replied = connectingRef.current;
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
@@ -159,7 +161,7 @@ function InviteSession(props: Props & { onRestart: () => void }) {
       return;
     }
 
-    nearby.createInvite({ gameId, origin }).then(
+    nearby.createInvite({ gameId, origin, manualStart: true }).then(
       (invite) => {
         if (!mountedRef.current) {
           invite.cancel();
@@ -203,12 +205,12 @@ function InviteSession(props: Props & { onRestart: () => void }) {
 
         setNotice(null);
         setDetails(invite);
-        repliedRef.current.add(invite);
+
         if (!createdRef.current.has(invite)) {
           // Another invitation of this tab (another dialog's, which owns it): follow it here too.
           follow(invite, Date.now());
         }
-        setPhase((current) => (current.name === "connected" ? current : { name: "connecting", invite }));
+        setPhase((current) => (current.name === "connected" ? current : { name: "ready", invite }));
         return true;
       } catch (error) {
         const reason = reasonOf(error);
@@ -226,6 +228,30 @@ function InviteSession(props: Props & { onRestart: () => void }) {
     },
     [follow]
   );
+
+  // A phone camera may open the reply in another tab; the handoff must also reveal the ready step.
+  useEffect(() => {
+    if (phase.name !== "waiting") return;
+    const invite = phase.invite;
+    return invite.onDiagnostics((snapshot) => {
+      if (snapshot.remote !== null) {
+        setPhase((current) =>
+          current.name === "waiting" && current.invite === invite ? { name: "ready", invite } : current
+        );
+      }
+    });
+  }, [phase]);
+
+  const connect = () => {
+    if (phase.name !== "ready") return;
+    const invite = phase.invite;
+    connectingRef.current.add(invite);
+    setPhase({ name: "connecting", invite });
+    invite.startConnecting().catch((error) => {
+      if (mountedRef.current)
+        setPhase({ name: "failed", key: inviteFailureKey(reasonOf(error), { replied: true, ageMs: 0 }) });
+    });
+  };
 
   const onCameraSettled = useCallback(() => setCameraSettled(true), []);
 
@@ -266,6 +292,14 @@ function InviteSession(props: Props & { onRestart: () => void }) {
         <div className="flex flex-column items-center">
           <Txt className="light-red tc mb3" role="alert" value={t(phase.key)} />
           <Button primary size={ButtonSize.SMALL} text={t("nearby.invite.retry")} onClick={onRestart} />
+        </div>
+      )}
+
+      {phase.name === "ready" && (
+        <div className="flex flex-column items-center tc">
+          <Txt role="status" value={t("nearby.ready")} />
+          <Txt className="mv3 mw6" value={t("nearby.connectTogether")} />
+          <Button primary text={t("nearby.connectNow")} onClick={connect} />
         </div>
       )}
 
