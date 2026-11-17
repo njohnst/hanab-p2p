@@ -47,153 +47,25 @@ are played from one browser during testing.
 `src/lib/network/index.ts` is the API contract the UI uses. Its exported signatures and documented
 behaviour are fixed; implementations change behind it.
 
-### Model: replicated document + one authority
+### Unified connections
 
-- A game is the same document Firebase stored: `cleanState(game)` (options, players, turnsHistory,
-  messages, reviewComments, status, timestamps, nextGameId). Derived data (hands, piles) is rebuilt
-  deterministically with `rebuildGame` (the deck comes from `options.seed`).
-- **Every peer keeps a full replica**, persisted in localStorage (`hanab.game.<id>`), so the game
-  survives any peer leaving or refreshing, including its creator, and can be resumed later.
-- Each game is a Trystero room: `appId` is fixed for the app, `roomId` = game id, and
-  `password` = game id (encrypts SDP on the public relays). Pass & play and tutorial games never join
-  a room (`status: "local"`).
-- At any time **one peer is the authority**. It orders writes by stamping a monotonically increasing
-  `version`, runs the bots' turns, broadcasts the resulting state, and answers newcomers. Every other
-  peer sends its writes to the authority as proposals.
-- Replicas adopt any received state with a higher `version`. `(version, authorKey)` totally orders
-  states, so a temporary split brain converges.
+The default `webrtc` transport combines automatic Trystero connections with QR-created connections.
+One LinkManager exists for the browser tab in both cases. `/nearby/` is the connection scanner,
+not a mode switch; navigating there never reloads the game or discards its live links.
 
-### Authority election
+`transports/combined.ts` exposes one logical room over both transports. A stable tab id, a sequence
+number, and a bounded recent-message cache prevent duplicate peers and messages when both paths
+connect the same devices. Presence is announced every 5s; silent peers expire after 20s. Explicit
+leaves are forwarded immediately. Room envelopes can be forwarded through other participants so
+a QR-only player can reach an internet-only authority. There is an 8-hop limit and a 128-peer limit;
+game payloads still pass through the sync engine's validation. A bridging participant must stay
+connected until another route exists. Internet join failures do not block the QR transport, and
+failed joins are retried. The room protocol requires all participants to reload the updated app.
 
-- Each tab has an `authorKey`, unique per tab and stable for its lifetime.
-- The authority is sticky: while connected, it stays the authority. When it leaves, the remaining
-  peers deterministically pick a new one among the peers that hold state (smallest key).
-- A peer that (re)joins first syncs (adopts the highest version it hears) before it can act as the
-  authority. When two authorities meet, the one holding the higher `(version, authorKey)` wins, and
-  the other re-proposes its unacknowledged local writes.
-- Bots run only on the authority, so a bot never plays the same turn twice.
-
-### Writes: proposals and 3-way merge
-
-`updateGame(newGame)` sends `{ baseVersion, base, proposed }`, where `base` is the replica the writer
-last saw. The authority merges `proposed` into its current state with `mergeGame(base, current,
-proposed)`, a pure, unit-tested function:
-
-| Field | Merge rule |
-|-------|-----------|
-| `turnsHistory` | If unchanged from base: keep current. If current is still equal to base: take proposed (action or rollback). If both changed: equal → no-op (e.g. a duplicate bot turn), else **reject** the proposal (the turn already moved). |
-| `players` | Union by `id`, keeping current order and appending new joiners in arrival order (join order deals the hands); field changes (name, reaction, notified, bot) applied where proposed differs from base. Joins beyond `playersCount` or after the lobby are rejected. |
-| `messages` | Union by `id`, current order first. |
-| `reviewComments` | Union keyed by (`playerId`, `afterTurnNumber`), proposed wins for its changed keys; rollbacks may drop comments after the rollback turn. |
-| `status`, `options`, `startedAt`, `endedAt`, `nextGameId` | Take proposed where it differs from base, else current. |
-
-A rejected writer receives `reject` plus the current state; the UI may tell the player that the turn
-already moved on. Writes made while alone apply locally (the tab is the authority of its own replica)
-and reconcile through versions when peers return.
-
-### Wire protocol (JSON over Trystero actions)
-
-Every message carries `protocol` (an integer). Peers with a different `protocol` are ignored and
-reported through `ConnectionInfo.error` ("someone is running a different version — reload").
-Suggested messages: `hello` (authorKey, playerId, version, isAuthority), `state` (version, authorKey,
-game), `propose` (proposalId, baseVersion, base, proposed), `reject` (proposalId, reason),
-`bye` (the sender is leaving the room: drop it now), `public-game` (lobby summary). States are a few
-KB, and Trystero chunks larger payloads.
-
-### Public rooms
-
-Public network games in their lobby are listed on "Join a room" through a shared Trystero room
-(`roomId` = `public-lobby`) where each such game's authority periodically announces a `PublicGame`
-summary. Entries expire after about 30 seconds without an announcement. Private games are never
-announced.
-
-### Connection robustness
-
-- On `pagehide`, send `bye` and leave every room, so peers drop the tab and hand the authority over
-  at once instead of after WebRTC's ~25s timeout. The network layer does not use `beforeunload`: it
-  also fires for navigations that never happen (cancelled, `mailto:` links) and keeps Firefox from
-  caching the page. (The play page registers one in nearby mode, only while links are open, to warn
-  before a reload: see [Limits](#limits).)
-- On `pageshow` from the back/forward cache, `visibilitychange` back to visible, or `online`, re-join
-  (as a follower that syncs first) or re-announce if no peers are connected (mobile browsers drop
-  WebRTC when backgrounded).
-- STUN: Trystero defaults plus `stun:stun.l.google.com:19302`. TURN from `NEXT_PUBLIC_TURN_URLS`,
-  `NEXT_PUBLIC_TURN_USERNAME` and `NEXT_PUBLIC_TURN_CREDENTIAL` when set.
-- Keep at most about 50 replicas in localStorage, evicting the least recently updated.
-
-### Testing
-
-- Transports implement one small interface: Trystero (production), BroadcastChannel (`?net=local`,
-  same-browser tabs, no internet needed), nearby links (`?net=nearby`, see below), and in-memory
-  (unit tests, including injectable delays, drops and partitions).
-- Vitest covers `mergeGame`, election, convergence (concurrent joins, chat, duplicate bot moves,
-  rejected conflicting turns, authority leaving mid-game, stale peer rejoining, split brain healing),
-  persistence and protocol mismatch.
-- Nearby play, in Node with a simulated WebRTC (`nearby/testing.ts`: two fake connections connect
-  only when each one's remote description carries the other's ICE credentials and fingerprint, and
-  a pair can be made unreachable, stalled or silent):
-  - codes: SDP captured from Chrome (offer and answer), Firefox- and Safari-like SDP written by hand,
-    size, the rebuilt SDP, address encoding, damaged codes and other versions, `parseNearbyText`;
-  - links: the handshake, the gathering cap, several pending invites, wrong kinds and own codes,
-    expiry and the connect timeout, cancel, no WebRTC, a 4-tab mesh with relaying rules and retry
-    backoff, replaced links, silence, throttled timers, `bye`, split messages, the reply hand-off;
-  - the nearby transport, and a scenario with real nodes: A invites B, B invites C, A and C link
-    through the mesh, the game syncs, A leaves and B takes over as the authority;
-  - mode selection, and the `pagehide` order (rooms, then links).
-- Offline cache and LAN hosting: the generated `sw.js` runs against stand-ins for fetch, Cache
-  Storage and the clients (install, hash mismatch, missing file, resumed install, cache cleanup,
-  routing, Range); the order of the LAN origins (`scripts/*.test.mjs`); registration and `?sw=off`
-  (`serviceWorker.test.ts`); invite origins on localhost (`nearbyOrigin.test.ts`).
-- UI helpers: invite origins, failure messages, player names, QR geometry and camera problems; the
-  English and French `nearby` translations have the same keys and interpolations.
-- Left to manual testing: the camera, real WebRTC between browsers and devices, the wake lock, the
-  leave warning. Two tabs of one browser can play nearby with the paste fields; then phones on one
-  Wi-Fi.
-
-## Nearby play (no internet)
-
-Players on the same local network (home Wi-Fi, a phone's hotspot, an office intranet that blocks the
-internet) can play with **no server of any kind**: no signaling relay, no STUN. The WebRTC offer and
-answer of the first connection are exchanged as QR codes, one in each direction; the tabs then
-connect to each other on their own.
-
-| `src/lib/network/`          | Role |
-|-----------------------------|------|
-| `nearby/types.ts`           | Public types: `NearbyApi`, `NearbyInvite`, `NearbyReply`, `NearbyLink`, `NearbyError` and its reasons |
-| `nearby/codec.ts`           | Compact codes, SDP parsing and rebuilding, invite and reply URLs, `parseNearbyText` |
-| `nearby/links.ts`           | `LinkManager`: the QR handshake, links, the mesh, liveness, the reply hand-off between tabs |
-| `nearby/transport.ts`       | The `nearby` transport: game rooms over the links |
-| `nearby/games.ts`           | Games joined in nearby mode |
-| `nearby/testing.ts`         | Simulated WebRTC and BroadcastChannel for the tests |
-| `browser.ts`, `lifecycle.ts` | Mode selection, wiring, `pagehide` |
-
-`index.ts` adds `getNetworkMode()`, `getNearby()` (this tab's `NearbyApi`: `createInvite`,
-`answerInvite`, `acceptReply`, `links`, `subscribe`; null outside nearby mode), `parseNearbyText`,
-`deliverReplyToOtherTab`, `isNearbyGame`, and `NearbyError`/`isNearbyError`.
-
-### Mode
-
-- A tab's network mode is decided the first time `~/lib/network` is used after a page load
-  (`getNetworkMode()`, or anything that creates the node) and kept in sessionStorage (`hanab.net`),
-  so reloads keep it:
-  - `webrtc`: Trystero, the default;
-  - `local`: `?net=local`;
-  - **`nearby`**: `?net=nearby`, or any page under `/nearby/` (after the base path).
-
-  An explicit `?net=` wins over the path, and `?net=webrtc` clears the stored mode. Switching mode
-  takes a full page load (the node is a per-tab singleton): `/nearby/` reached client-side from
-  another mode reloads itself with `?net=nearby`, and "Play online instead" loads `/?net=webrtc`.
-- Nearby mode uses only the nearby transport (no Trystero, no public relays). `isOnline` is always
-  true there: the browser's online flag says nothing about the LAN.
-- The sync engine runs with shorter timings than online: sync window 2s, election timeout 2.5s,
-  retry 2s (online: 4s, 4s, 3s). Links are open before any room is joined, so a room's members are
-  known one LAN round trip later; the margin is for phones on Wi-Fi, whose power saving can delay
-  packets by a few hundred ms.
-- Every room joined in nearby mode except the public lobby is remembered in localStorage
-  (`hanab.nearbyGames`, most recent first, at most 50). `isNearbyGame()` reads it from any tab, so a
-  tab in another mode can offer to switch when it opens one of those games.
-- Inside nearby mode every in-app navigation must be client-side (Next router): a full page load
-  closes the WebRTC connections, and getting them back takes a new QR exchange.
+The browser's offline flag does not disable local networking. The default uses the normal sync
+timings; explicit `?net=nearby` is a relay-free diagnostic override with shorter timings, and
+`?net=local` keeps BroadcastChannel testing. Old stored nearby modes are migrated to the default.
+The room link, privacy setting and player identity do not depend on the connection method.
 
 ### Handshake (two QR codes)
 
@@ -419,45 +291,21 @@ whether each side offered an address on the shared network and whether any check
 - Join page: join by room name or link, plus the live public-room list.
 - Home: "Your games" list from local replicas.
 
-Nearby play (all its strings are under `nearby` in `en.ts` and `fr.ts`):
+Unified connection UI (strings under `unified` and `nearby` in English and French):
 
-- Home: "Play without internet" opens `/nearby/` with a page load. In nearby mode a banner replaces
-  it, with "Scan an invitation" and "Play online instead".
-- `/nearby/` (`src/pages/nearby.tsx`): `#o=` answers the invitation; `#a=` hands the reply to the
-  inviting tab; otherwise a landing page with a short explanation, the scanner, "Create a room",
-  "Play online instead" and the "Nearby devices" list (named after the players of local replicas).
-- Inviting (`nearbyInvite.tsx`), in nearby mode: the lobby's share panel becomes an "Invite a nearby
-  player" button that opens a dialog; ☰ → Invite players shows the panel inline; the connection
-  indicator's popover has the same button.
-  - The panel starts the camera first. The invitation is made once the camera is live or unavailable,
-    or when the player clicks "Continue without the camera".
-  - It shows the invitation QR code (large, on white, with a 4-module quiet zone), "Can't scan it?
-    Copy the link" (Copy, and Share where available), and the reply scanner below.
-  - On localhost it uses the first LAN origin, with a select when there are several and a warning when
-    there are none.
-  - Replies it can't use show a message and scanning goes on. Once connected: "Invite another
-    player".
-  - Closing it cancels pending invitations, except those whose Connect now button was pressed there.
-- Guest (`nearbyJoin.tsx`): after answering, the reply QR code with Cancel; once linked, the game
-  opens client-side. A reply scanned there instead of an invitation is applied by this tab, or handed
-  to the tab of this browser that holds its invitation.
-- Scanner (`qrScanner.tsx`): the live camera on secure pages (back camera, 4 frames per second, the
-  centred square scaled down to at most 640 px, `BarcodeDetector` where it reads QR codes, else
-  jsQR, loaded on demand), stopped while the page is hidden. "Take a photo" (a file input with `capture`) and a paste
-  field are always offered.
-- Connection indicator: "Nearby" and "x/y nearby"; with no peers, a hint and "Scan an invitation".
-  The waiting-for-game screen gets the nearby wording and the same button.
-- Join page: in nearby mode the scanner replaces the name/link form and the public rooms; online, a
-  "No internet? Play nearby" link.
-- New game: in nearby mode the Private option is hidden and games are always private.
-- Play page: in nearby mode, while links are open, a Screen Wake Lock (taken again when the page is
-  visible) and a leave warning. In another mode, a game that `isNearbyGame()` knows shows a "Switch
-  to nearby play" banner, which reloads the page with `net=nearby`.
-- The screen is also kept awake while an invitation or a reply is shown. In nearby mode,
-  `overscroll-behavior-y: contain` on `<html class="nearby-mode">` turns off pull-to-refresh.
-- Client-side navigation in nearby mode: the rematch ("New game") uses the router there (online it
-  still loads the page, as upstream does), and the tutorial's "Back to game" is a `next/link` in
-  both modes.
+- Home has one Create / Join flow. No online/offline mode choice or switching banner.
+- The lobby and in-game Invite players panel always show the room link, QR, Copy and supported Share.
+  **Connect by QR** opens the optional connection handshake, without changing the room.
+- Join accepts a room name/link and offers a scanner accepting both room and connection QR codes.
+- The waiting-for-game screen offers the same connection scanner while automatic discovery continues.
+- `/nearby/#o=` answers a connection invitation; `#a=` hands the reply to its inviting tab.
+- The connection handshake still uses two QR codes and the coordinated **Connect now** buttons.
+  After failure, both screens show Android Nearby devices permission troubleshooting and diagnostics.
+- Status says connected, rather than choosing online/nearby labels. The connection popover offers
+  QR reconnection. An invitation opened from the menu is owned by the game, surviving turn changes.
+- QR links survive in-app navigation and rematches. While they are open, the game takes a screen
+  wake lock where supported and warns before leaving. Pull-to-refresh is disabled for network play.
+- Private/public rooms remain a room setting; the connection method does not change it.
 
 ## Removed
 

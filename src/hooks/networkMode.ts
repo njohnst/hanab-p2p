@@ -25,7 +25,7 @@ export function useNetworkMode(): NetworkMode | null {
       .then(({ getNetworkMode }) => {
         if (cancelled) return;
         const current = getNetworkMode();
-        if (current === "nearby") {
+        if (current !== "local") {
           document.documentElement.classList.add(NEARBY_MODE_CLASS);
         }
         setMode(current);
@@ -42,7 +42,7 @@ export function useNetworkMode(): NetworkMode | null {
 
 /**
  * This tab's nearby links (open ones and mesh connections being set up), kept up to date; null
- * outside nearby mode, while loading, or when `enabled` is false.
+ * in BroadcastChannel test mode, while loading, or when `enabled` is false.
  */
 export function useNearbyLinks(enabled = true): NearbyLink[] | null {
   const [links, setLinks] = useState<NearbyLink[] | null>(null);
@@ -57,8 +57,8 @@ export function useNearbyLinks(enabled = true): NearbyLink[] | null {
     let unsubscribe: () => void = () => undefined;
     import("~/lib/network")
       .then(({ getNearby, getNetworkMode }) => {
-        // getNearby() creates the network node: only ask in nearby mode.
-        const nearby = !cancelled && getNetworkMode() === "nearby" ? getNearby() : null;
+        // QR connections are available in the unified default and the relay-free test mode.
+        const nearby = !cancelled && getNetworkMode() !== "local" ? getNearby() : null;
         if (nearby) {
           unsubscribe = nearby.subscribe((current) => setLinks(current));
         }

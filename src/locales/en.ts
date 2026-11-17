@@ -8,7 +8,7 @@ export const en = {
   welcome: "Welcome",
   newGame: "New game",
   nextGame: "Next Game",
-  tagline: "Play Hanab online with friends!",
+  tagline: "Play Hanab with friends!",
   subTagline: "Cooperative multiplayer card game available on phone, tablet & desktop",
   createRoom: "Create a room",
   joinRoom: "Join a room",
@@ -42,8 +42,8 @@ export const en = {
   connectionConnecting: "Connecting…",
   connectionOffline: "Offline",
   connectionProblem: "Connection problem",
-  connectionOnline: "Online",
-  playersOnline: "{{online}}/{{total}} online",
+  connectionOnline: "Connected",
+  playersOnline: "{{online}}/{{total}} connected",
   playerConnected: "connected",
   playerNotConnected: "not connected",
   spectatorsWatching: "{{count}} spectator watching",
@@ -67,6 +67,18 @@ export const en = {
     lobby: "Waiting in lobby",
     ongoing: "In progress",
     over: "Finished",
+  },
+  unified: {
+    connectionHint:
+      "Players connect automatically when internet is available. If you cannot connect, exchange connection QR codes with a player beside you.",
+    connectByQr: "Connect by QR",
+    scanQr: "Scan a room or connection QR code",
+    qrExplanation:
+      "Use this when the room link cannot connect you automatically. On the same Wi-Fi or hotspot, scan a player’s connection invitation, let them scan your reply, then tap Connect now on both phones.",
+    gameExplanation:
+      "Share the room link or QR code with your friends. Connect automatically over the internet, or exchange connection QR codes on the same Wi-Fi without internet.",
+    waiting:
+      "Keep this page open while another player shares the game. If you are together and cannot connect automatically, ask them to open Connect by QR and scan their connection invitation.",
   },
   nearby: {
     troubleshooting: {
@@ -140,7 +152,7 @@ export const en = {
       error: "The camera could not start.",
     },
     invite: {
-      title: "Invite a nearby player",
+      title: "Connect by QR",
       button: "Invite a nearby player",
       lobbyHint: "They scan a QR code on your screen: no internet needed.",
       step1: "1. Ask them to scan this code with their camera",

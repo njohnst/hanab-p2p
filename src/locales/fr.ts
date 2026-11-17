@@ -2,7 +2,7 @@ export const fr = {
   hanab: "Hanab",
   welcome: "Bienvenue",
   newGame: "Nouvelle partie",
-  tagline: "Jouez au jeu Hanab en ligne avec vos amis !",
+  tagline: "Jouez au jeu Hanab avec vos amis !",
   subTagline: "Jeu de cartes multijoueur et coopératif, disponible sur téléphones, tablettes & ordinateurs",
   createRoom: "Nouvelle partie",
   joinRoom: "Rejoindre une partie",
@@ -36,8 +36,8 @@ export const fr = {
   connectionConnecting: "Connexion…",
   connectionOffline: "Hors ligne",
   connectionProblem: "Problème de connexion",
-  connectionOnline: "En ligne",
-  playersOnline: "{{online}}/{{total}} en ligne",
+  connectionOnline: "Connecté",
+  playersOnline: "{{online}}/{{total}} connectés",
   playerConnected: "connecté",
   playerNotConnected: "pas connecté",
   spectatorsWatching: "{{count}} spectateur",
@@ -62,6 +62,18 @@ export const fr = {
     lobby: "En attente dans le lobby",
     ongoing: "En cours",
     over: "Terminée",
+  },
+  unified: {
+    connectionHint:
+      "Les joueurs se connectent automatiquement quand internet est disponible. Sinon, échange des QR codes de connexion avec un joueur à côté de toi.",
+    connectByQr: "Connecter par QR",
+    scanQr: "Scanner un QR de partie ou de connexion",
+    qrExplanation:
+      "Utilise ceci si le lien de la partie ne te connecte pas automatiquement. Sur le même Wi-Fi ou partage de connexion, scanne l’invitation de connexion d’un joueur, laisse-le scanner ta réponse, puis touche Connecter maintenant sur les deux téléphones.",
+    gameExplanation:
+      "Partage le lien ou le QR code de la partie. Connectez-vous automatiquement par internet, ou échangez des QR codes de connexion sur le même Wi-Fi sans internet.",
+    waiting:
+      "Garde cette page ouverte pendant qu’un joueur partage la partie. Si vous êtes ensemble et que la connexion automatique échoue, demande-lui d’ouvrir Connecter par QR et scanne son invitation de connexion.",
   },
   nearby: {
     troubleshooting: {
@@ -137,7 +149,7 @@ export const fr = {
       error: "La caméra n'a pas pu démarrer.",
     },
     invite: {
-      title: "Inviter un joueur à proximité",
+      title: "Connecter par QR",
       button: "Inviter à proximité",
       lobbyHint: "Il scanne un QR code sur ton écran : pas besoin d'internet.",
       step1: "1. Demande-lui de scanner ce code avec son appareil photo",

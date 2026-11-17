@@ -19,7 +19,7 @@ import {
   NearbyReply,
   parseNearbyText,
 } from "~/lib/network";
-import { gameUrl } from "~/lib/routes";
+import { gameUrl, parseGameReference } from "~/lib/routes";
 
 /**
  * The guest's side of nearby play (docs/P2P_DESIGN.md, "Handshake (two QR codes)"): scan an
@@ -62,6 +62,7 @@ interface JoinProps {
  */
 export default function NearbyJoin(props: JoinProps) {
   const { initialInvite = null } = props;
+  const router = useRouter();
   const { t } = useTranslation();
   const [invite, setInvite] = useState<{ text: string; id: number } | null>(
     initialInvite ? { text: initialInvite, id: 0 } : null
@@ -69,24 +70,32 @@ export default function NearbyJoin(props: JoinProps) {
   const [notice, setNotice] = useState<string>(null);
   const countRef = useRef(0);
 
-  const onResult = useCallback(async (text: string): Promise<boolean> => {
-    const parsed = parseNearbyText(text);
-    if (!parsed) {
-      setNotice("nearby.join.notNearby");
-      return false;
-    }
+  const onResult = useCallback(
+    async (text: string): Promise<boolean> => {
+      const parsed = parseNearbyText(text);
+      if (!parsed) {
+        const gameId = parseGameReference(text);
+        if (gameId) {
+          await router.push(gameUrl(gameId));
+          return true;
+        }
+        setNotice("nearby.join.notNearby");
+        return false;
+      }
 
-    if (parsed.kind === "reply") {
-      const outcome = await handOffReply(text);
-      setNotice(outcome === "nobody" ? "nearby.join.reply" : "nearby.join.replyHandedOff");
-      return false;
-    }
+      if (parsed.kind === "reply") {
+        const outcome = await handOffReply(text);
+        setNotice(outcome === "nobody" ? "nearby.join.reply" : "nearby.join.replyHandedOff");
+        return false;
+      }
 
-    setNotice(null);
-    countRef.current += 1;
-    setInvite({ text, id: countRef.current });
-    return true;
-  }, []);
+      setNotice(null);
+      countRef.current += 1;
+      setInvite({ text, id: countRef.current });
+      return true;
+    },
+    [router]
+  );
 
   const onScanAnother = useCallback(() => setInvite(null), []);
 

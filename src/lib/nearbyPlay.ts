@@ -35,12 +35,7 @@ export function withNetworkMode(href: string, mode: NetworkMode): string {
  * the other devices), otherwise with a page load, which switches the tab to nearby mode.
  */
 export async function openNearbyPage(router: { push(url: string): Promise<boolean> }): Promise<void> {
-  const { getNetworkMode } = await import("~/lib/network");
-  if (getNetworkMode() === "nearby") {
-    await router.push(NEARBY_PAGE);
-  } else {
-    window.location.assign(nearbyPageHref());
-  }
+  await router.push(NEARBY_PAGE);
 }
 
 /* ------------------------------------------------------------------ */

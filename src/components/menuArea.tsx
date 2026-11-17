@@ -10,7 +10,6 @@ import { Modal } from "~/components/ui/modal";
 import Txt, { TxtSize } from "~/components/ui/txt";
 import UserPreferencesDialog from "~/components/userPreferencesDialog";
 import { useGame } from "~/hooks/game";
-import { useNetworkMode } from "~/hooks/networkMode";
 import { UserPreferences, useUserPreferences } from "~/hooks/userPreferences";
 import { logFailedPromise } from "~/lib/errors";
 import { GameMode } from "~/lib/state";
@@ -23,7 +22,6 @@ interface Props {
 
 export default function MenuArea(props: Props) {
   const { onCloseArea, onInviteNearby } = props;
-  const nearby = useNetworkMode() === "nearby";
 
   const [showRules, setShowRules] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -77,7 +75,7 @@ export default function MenuArea(props: Props) {
                 className="mb3 w-100"
                 size={ButtonSize.MEDIUM}
                 text={t("invitePlayers")}
-                onClick={() => (nearby && onInviteNearby ? onInviteNearby() : setShowInvite(true))}
+                onClick={() => setShowInvite(true)}
               />
             )}
             <Button className="mb3 w-100" size={ButtonSize.MEDIUM} text={t("userPreferences")} onClick={onPrefClick} />
@@ -94,7 +92,7 @@ export default function MenuArea(props: Props) {
 
         {showInvite && (
           <div className="flex flex-column items-center pv3">
-            <ShareGame inviteNow gameId={game.id} />
+            <ShareGame gameId={game.id} onConnectByQr={onInviteNearby} />
             <Button className="mt4" size={ButtonSize.SMALL} text={t("back")} onClick={() => setShowInvite(false)} />
           </div>
         )}

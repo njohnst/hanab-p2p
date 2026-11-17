@@ -2,13 +2,11 @@ import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
 import GameIndex from "~/components/GameIndex";
 import LoadingScreen from "~/components/loadingScreen";
-import { SwitchToNearbyBanner } from "~/components/nearbyBanners";
 import { TutorialProvider } from "~/components/tutorial";
 import { useKeepAwake, useLeaveWarning } from "~/hooks/keepAwake";
-import { useNearbyLinks, useNetworkMode } from "~/hooks/networkMode";
+import { useNearbyLinks } from "~/hooks/networkMode";
 import { ReplayContext } from "~/hooks/replay";
 import { logFailedPromise } from "~/lib/errors";
-import { isNearbyGame } from "~/lib/network";
 import { queryParam } from "~/lib/routes";
 
 /**
@@ -44,7 +42,7 @@ function GamePage(props: { gameId: string }) {
           <GameIndex gameId={gameId} />
         </ReplayContext.Provider>
       </TutorialProvider>
-      <NearbyPlay gameId={gameId} />
+      <NearbyPlay />
     </>
   );
 }
@@ -55,19 +53,10 @@ function GamePage(props: { gameId: string }) {
  *   leaving the page: a reload or a phone locking itself loses the links;
  * - in another mode, for a game this browser played nearby, offer to switch to nearby mode.
  */
-function NearbyPlay(props: { gameId: string }) {
-  const { gameId } = props;
-  const mode = useNetworkMode();
-  const links = useNearbyLinks(mode === "nearby");
+function NearbyPlay() {
+  const links = useNearbyLinks();
   const linked = !!links?.some((link) => link.state === "open");
-  const [playedNearby, setPlayedNearby] = useState(false);
-
   useKeepAwake(linked);
   useLeaveWarning(linked);
-
-  useEffect(() => {
-    setPlayedNearby(isNearbyGame(gameId));
-  }, [gameId]);
-
-  return mode && mode !== "nearby" && playedNearby ? <SwitchToNearbyBanner /> : null;
+  return null;
 }

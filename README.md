@@ -20,7 +20,8 @@ You can also [buy the hanab.cards authors a coffee](https://www.buymeacoffee.com
 - **Static site.** `yarn build` produces plain files in `out/`, with no server-side code.
 - **WebRTC between players.** Each game is a room found through public
   [Nostr](https://nostr.com) relays via [Trystero](https://github.com/dmotz/trystero). The relays only
-  help browsers find each other; game data then flows directly between players. Signaling is encrypted
+  help browsers find each other; game data then flows between players over WebRTC. A participant
+  connected both ways can forward game messages between QR-only and internet-only players. Signaling is encrypted
   with the room name. Connections use public STUN servers, and an optional TURN relay can be configured
   (see [TURN](#optional-turn-relay)).
 - **Every player keeps a copy of the game** in their browser (localStorage, the 50 most recent games).
@@ -59,7 +60,9 @@ The full design is in [docs/P2P_DESIGN.md](docs/P2P_DESIGN.md).
 2. **Invite**: the lobby shows the game link, a QR code, a Copy button and, where the browser can share
    (most phones, some desktop browsers), a Share button. The ☰ menu has an **Invite players** entry with
    the same QR code during the game too, though anyone joining after the start can only watch.
-3. Fill empty seats with AI players if you like, then start.
+3. Browsers connect automatically when internet is available. If they cannot, **Connect by QR** in
+   the same invite panel opens a two-way connection handshake; see below. There is no mode switch.
+4. Fill empty seats with AI players if you like, then start.
 
 Your seat belongs to the browser you joined from: opening the link on another device lets you watch, not
 play your hand.
@@ -79,11 +82,12 @@ internet. The devices talk to each other directly, with no server in between.
 
 ### Starting a game
 
-1. On the home page, tap **Play without internet**, then **Create a room**.
-2. In the lobby, tap **Invite a nearby player** and allow the camera: you'll need it to scan the
+1. On the home page, tap **Create a room**, just as you would with internet.
+2. In the lobby’s share panel, tap **Connect by QR** and allow the camera: you'll need it to scan the
    reply, and it helps the devices find each other on some networks.
-3. The other player scans your code with their phone's camera app, or in the app (**Play without
-   internet**, then **Scan with the camera**). Their screen then shows a reply code.
+3. The other player scans the connection invitation with their phone's camera app, or in the app
+   (**Join a room → Scan a room or connection QR code**). Their screen then shows a reply code.
+   If they already opened the ordinary room link, **Connect by QR** is also on its waiting screen.
 4. Scan the reply in the same dialog. On the other phone, tap **The other phone has scanned my reply**.
 5. Once both phones show **Ready to connect**, tap **Connect now** on both at roughly the same time.
    The game opens on the guest’s screen when connected.
@@ -100,7 +104,7 @@ paste the code or link**. **Take a photo** works too.
 
 Reloading the page disconnects that device, and so can a phone that is locked or leaves the app in the
 background for a while. The game itself is safe: every device keeps a copy. To bring the device back,
-any connected player invites it again (☰ → **Invite players**) and it scans the new code; the
+any connected player opens ☰ → **Invite players → Connect by QR**, and it scans the new code; the
 connection status on the dropped device also has **Scan an invitation**.
 
 To make this rarer, while connected the game keeps the screen awake (on https pages) and asks before
@@ -110,8 +114,8 @@ you leave or reload the page, and pull-down-to-refresh is turned off.
 
 - **The same network for everyone**: one Wi-Fi, or everyone on one phone's hotspot (that phone can play
   too). Some guest and public Wi-Fi networks keep devices from seeing each other; a hotspot works
-  instead. Each pair of devices connects directly, so a device that can't reach another one can't play
-  with it.
+  instead. Each device needs a working connection to at least one participant; room messages can
+  pass through participants connected to both sides.
 - **The app on each device**, one of two ways:
   - open the site (https) once while online, in the browser your phone opens links with, and give it
     a moment to store itself. It then opens with no internet, also from the camera app scanning an
@@ -135,12 +139,12 @@ you leave or reload the page, and pull-down-to-refresh is turned off.
 - Under each QR code, **Connection details** shows which network addresses this device offered, the
   other device's, and how many connection checks were answered. It opens by itself after a failure;
   **Copy** gives a short text report to send to whoever helps you (it includes the device's local
-  network addresses). On the guest's screen its status line is the only sign that the connection
-  failed, since the guest keeps waiting for the inviter.
+  network addresses). Both sides show a failure screen if the connection attempt fails.
 
-A tab stays in nearby mode, reloads included, until you tap **Play online instead**. In this mode
-players join by scanning: game links and public rooms are for online play, and games are always
-private. Opening a game you played nearby from an online tab offers **Switch to nearby play**.
+The room link and its QR code are always shareable, with or without internet. The link identifies
+the room; the optional two-way **connection** QR exchange supplies the connection details when
+automatic discovery is unavailable. Privacy is set by the room’s **Private** option, independently
+of the connection method. Everyone should reload after upgrading from the older separate modes.
 
 ## Development
 
@@ -162,7 +166,8 @@ All tabs of a browser share one player identity. To be several players at once:
   internet needed. Every tab of the game needs it (e.g. `/play/?gameId=FooBarBaz&as=bob&net=local`):
   invite links don't carry it. The tab remembers the choice until it closes; `?net=webrtc` switches it
   back.
-- Add `?net=nearby`, or open any page under `/nearby/`, for nearby mode. It is remembered the same way.
+- For testing without internet signaling, open a tab with `?net=nearby`. This applies to that page
+  load only. Normal `/nearby/` QR links use the unified connection flow.
 
 ### Testing nearby play
 
@@ -170,9 +175,8 @@ Two or three tabs of one browser can play nearby, exchanging the codes by copy a
 `yarn dev`: on localhost every link stays on one origin (the invitation's yellow warning about
 localhost is expected).
 
-1. Tab A: open `http://localhost:3000/?as=alice`, click **Play without internet**, then **Create a
-   room** (3 players), and join the game.
-2. In the lobby, click **Invite a nearby player** (allow the camera or click **Continue without the
+1. Tab A: open `http://localhost:3000/?as=alice`, click **Create a room** (3 players), and join the game.
+2. In the lobby, click **Connect by QR** (allow the camera or click **Continue without the
    camera**). Open **Can't scan it? Copy the link** and click **Copy**.
 3. Tab B: open `http://localhost:3000/nearby/?as=bob` and paste the link under **Or paste the code or
    link**. Copy the reply link the same way.

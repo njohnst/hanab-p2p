@@ -8,14 +8,11 @@ import Button, { ButtonSize } from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
 import { useNetworkMode } from "~/hooks/networkMode";
 import { logFailedPromise } from "~/lib/errors";
-import { onlinePlayHref, withNetworkMode } from "~/lib/nearbyPlay";
-import { getNetworkMode, parseNearbyText } from "~/lib/network";
+import { parseNearbyText } from "~/lib/network";
 
 type View =
   /** Pre-rendered, and until the router has the URL. */
   | { name: "loading" }
-  /** Reloading in nearby mode. */
-  | { name: "switching" }
   | { name: "landing" }
   /** Opened with an invitation (`#o=`): answer it. `id` tells two fragments apart. */
   | { name: "invite"; text: string; id: number }
@@ -49,16 +46,6 @@ export default function Nearby() {
     // Wait for the router: until then, Next may still rewrite the address (adding the query).
     if (!ready) return;
 
-    if (getNetworkMode() !== "nearby") {
-      // Arrived client-side from an online page: the mode is chosen when a page loads.
-      const target = withNetworkMode(window.location.href, "nearby");
-      if (target !== window.location.href) {
-        setView({ name: "switching" });
-        window.location.replace(target);
-        return;
-      }
-    }
-
     let count = 0;
     const read = () => {
       const hash = window.location.hash;
@@ -85,13 +72,7 @@ export default function Nearby() {
     <div className="w-100 h-100 overflow-y-scroll relative bg-main-dark pa2 pv4-l ph3-l shadow-5 br3">
       <HomeButton className="absolute top-1 right-1" />
       <div className="center mw6 w-100 ph2 pv4 flex flex-column items-center">
-        {(view.name === "loading" || view.name === "switching") && (
-          <Txt
-            className="lavender mt5"
-            role="status"
-            value={view.name === "switching" ? t("nearby.switching") : t("loading")}
-          />
-        )}
+        {view.name === "loading" && <Txt className="lavender mt5" role="status" value={t("loading")} />}
 
         {view.name === "invite" && (
           <>
@@ -119,8 +100,8 @@ function Landing() {
 
   return (
     <>
-      <Txt className="mb3 tc" size={TxtSize.MEDIUM} value={t("nearby.title")} />
-      <Txt className="lavender tc mb4" value={t("nearby.intro")} />
+      <Txt className="mb3 tc" size={TxtSize.MEDIUM} value={t("unified.connectByQr")} />
+      <Txt className="lavender tc mb4" value={t("unified.qrExplanation")} />
 
       <NearbyJoin />
 
@@ -132,14 +113,6 @@ function Landing() {
           size={ButtonSize.MEDIUM}
           text={t("createRoom")}
           onClick={() => router.push("/new-game").catch(logFailedPromise)}
-        />
-        <Button
-          outlined
-          className="ma1"
-          id="play-online"
-          size={ButtonSize.MEDIUM}
-          text={t("nearby.playOnline")}
-          onClick={() => window.location.assign(onlinePlayHref())}
         />
       </div>
 

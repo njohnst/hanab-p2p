@@ -5,12 +5,12 @@
  * pre-render).
  */
 import { getPlayerId } from "~/lib/playerId";
-import { stripBasePath } from "~/lib/routes";
 import { watchPageLifecycle, withNearbyLinks } from "./lifecycle";
 import { LinkManager } from "./nearby/links";
 import { createNearbyTransport } from "./nearby/transport";
 import { NetworkNode, NetworkNodeOptions } from "./node";
 import { KeyValueStorage } from "./storage";
+import { createCombinedTransport } from "./transports/combined";
 import { createBroadcastChannelTransport } from "./transports/broadcast";
 import { createTrysteroTransport } from "./transports/trystero";
 import { NetworkMode } from "./types";
@@ -20,42 +20,23 @@ export type TransportKind = NetworkMode;
 
 const NET_KEY = "hanab.net";
 
-/** A page under /nearby/ (after the base path). */
-function isNearbyPath(pathname: string): boolean {
-  const path = stripBasePath(pathname);
-  return path === "/nearby" || path.startsWith("/nearby/");
-}
-
-/**
- * This tab's network mode (docs/P2P_DESIGN.md, "Mode"), kept for the rest of
- * the tab's life in sessionStorage:
- * - `?net=local`: BroadcastChannel (tabs of this browser play together, no
- *   internet needed);
- * - `?net=nearby`, or any page under /nearby/: nearby links (devices on the
- *   same local network, QR codes, no internet);
- * - `?net=webrtc` switches back to the default, WebRTC through Trystero.
+/** Unified play is the default, including old /nearby links and saved nearby sessions.
+ * Explicit ?net=nearby keeps a relay-free diagnostic mode; ?net=local keeps tab tests isolated.
  */
 export function selectTransportKind(): NetworkMode {
-  let fromUrl: string | null = null;
-  let nearbyPage = false;
+  let requested: string | null = null;
   try {
-    fromUrl = new URLSearchParams(window.location.search).get("net");
-    nearbyPage = isNearbyPath(window.location.pathname);
+    requested = new URLSearchParams(window.location.search).get("net");
   } catch {
-    fromUrl = null;
+    /* SSR */
   }
-  const requested: NetworkMode | null =
-    fromUrl === "local" || fromUrl === "nearby" || fromUrl === "webrtc" ? fromUrl : nearbyPage ? "nearby" : null;
   try {
-    if (requested === "webrtc") {
-      sessionStorage.removeItem(NET_KEY);
-    } else if (requested) {
-      sessionStorage.setItem(NET_KEY, requested);
-    }
-    const stored = sessionStorage.getItem(NET_KEY);
-    return stored === "local" || stored === "nearby" ? stored : "webrtc";
+    if (requested === "local") sessionStorage.setItem(NET_KEY, "local");
+    else if (requested || sessionStorage.getItem(NET_KEY) === "nearby") sessionStorage.removeItem(NET_KEY);
+    if (requested === "nearby") return "nearby";
+    return sessionStorage.getItem(NET_KEY) === "local" ? "local" : "webrtc";
   } catch {
-    return requested ?? "webrtc";
+    return requested === "local" || requested === "nearby" ? requested : "webrtc";
   }
 }
 
@@ -108,16 +89,22 @@ const NEARBY_TIMINGS: NetworkNodeOptions["timings"] = {
 export interface BrowserNetwork {
   mode: NetworkMode;
   node: NetworkNode;
-  /** This tab's links, in nearby mode only. */
+  /** QR-created links, available alongside automatic internet connections. */
   nearby: LinkManager | null;
 }
 
 export function createBrowserNetwork(mode: NetworkMode = selectTransportKind()): BrowserNetwork {
-  const nearby = mode === "nearby" ? new LinkManager({ getPlayerId }) : null;
+  const nearby = mode !== "local" ? new LinkManager({ getPlayerId }) : null;
 
   const node = new NetworkNode({
     transport: () => {
-      if (nearby) return createNearbyTransport(nearby, { storage: browserStorage });
+      if (nearby) {
+        const direct = createNearbyTransport(nearby);
+        return createCombinedTransport(
+          nearby.selfId,
+          mode === "nearby" ? [direct] : [direct, createTrysteroTransport({ iceServers: turnServersFromEnv() })]
+        );
+      }
       return mode === "local"
         ? createBroadcastChannelTransport()
         : createTrysteroTransport({ iceServers: turnServersFromEnv() });
@@ -125,7 +112,7 @@ export function createBrowserNetwork(mode: NetworkMode = selectTransportKind()):
     storage: browserStorage,
     getPlayerId,
     // The browser's online flag says nothing about the local network.
-    isOnline: () => mode === "nearby" || typeof navigator === "undefined" || navigator.onLine !== false,
+    isOnline: () => mode !== "local" || typeof navigator === "undefined" || navigator.onLine !== false,
     timings: mode === "local" ? LOCAL_TIMINGS : mode === "nearby" ? NEARBY_TIMINGS : undefined,
   });
 

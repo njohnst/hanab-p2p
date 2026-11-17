@@ -19,11 +19,11 @@ describe("network mode", () => {
     expect(selectTransportKind()).toBe("webrtc");
   });
 
-  it("is nearby on pages under /nearby/ and with ?net=nearby, for the rest of the tab's life", () => {
+  it("keeps QR pages in unified play, with an explicit relay-free diagnostic override", () => {
     const session = visit("/nearby/");
-    expect(selectTransportKind()).toBe("nearby");
+    expect(selectTransportKind()).toBe("webrtc");
     visit("/play/?gameId=SomeGame", session);
-    expect(selectTransportKind()).toBe("nearby");
+    expect(selectTransportKind()).toBe("webrtc");
 
     visit("/play/?gameId=SomeGame&net=webrtc", session);
     expect(selectTransportKind()).toBe("webrtc");
@@ -33,7 +33,7 @@ describe("network mode", () => {
     visit("/?net=nearby", session);
     expect(selectTransportKind()).toBe("nearby");
     visit("/nearby", createMemoryStorage());
-    expect(selectTransportKind()).toBe("nearby");
+    expect(selectTransportKind()).toBe("webrtc");
     visit("/nearby-games/", createMemoryStorage());
     expect(selectTransportKind()).toBe("webrtc");
   });
@@ -49,6 +49,14 @@ describe("network mode", () => {
     expect(selectTransportKind()).toBe("webrtc");
   });
 
+  it("migrates a saved nearby session to unified play", () => {
+    const session = createMemoryStorage();
+    session.setItem("hanab.net", "nearby");
+    visit("/play/?gameId=SomeGame", session);
+    expect(selectTransportKind()).toBe("webrtc");
+    expect(session.getItem("hanab.net")).toBeNull();
+  });
+
   it("works without sessionStorage", () => {
     visit("/nearby/");
     vi.stubGlobal("sessionStorage", {
@@ -62,6 +70,6 @@ describe("network mode", () => {
         throw new Error("blocked");
       },
     });
-    expect(selectTransportKind()).toBe("nearby");
+    expect(selectTransportKind()).toBe("webrtc");
   });
 });

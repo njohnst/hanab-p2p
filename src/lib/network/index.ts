@@ -13,8 +13,7 @@
  * tab); this module exposes the browser tab's node.
  *
  * Importing this module has no side effect: the node, its transport (Trystero,
- * BroadcastChannel with `?net=local`, or nearby links with `?net=nearby` and
- * pages under /nearby/) and its storage are created on first use in the
+ * and QR-created links together, or BroadcastChannel with `?net=local`) and its storage are created on first use in the
  * browser. During the static pre-render (no window) every function is inert.
  *
  * Nearby play (docs/P2P_DESIGN.md, "Nearby play (no internet)") adds, at the
@@ -195,12 +194,9 @@ export function listRecentGames(): RecentGame[] {
 /* ------------------------------------------------------------------ */
 
 /**
- * This tab's network mode: "nearby" with `?net=nearby` or on a page under
- * /nearby/, "local" with `?net=local`, "webrtc" otherwise (and outside the
- * browser). Chosen on first use (of this or of any function above) and kept
- * for the tab's lifetime (sessionStorage across reloads, until `?net=webrtc`):
- * switching mode takes a full page load. In nearby mode every in-app
- * navigation must stay client-side (Next router): a page load closes the links.
+ * Unified automatic + QR play ("webrtc") by default, including /nearby/ URLs.
+ * Explicit ?net=nearby disables internet signaling for testing; ?net=local uses BroadcastChannel.
+ * Chosen on first use for this page load. In-app navigation keeps existing connections alive.
  */
 export function getNetworkMode(): NetworkMode {
   if (typeof window === "undefined") {
@@ -214,7 +210,7 @@ export function getNetworkMode(): NetworkMode {
 
 /**
  * This tab's nearby links (creating the network node on first use); null
- * unless the tab is in nearby mode. See NearbyApi:
+ * only in the BroadcastChannel test mode or during SSR. See NearbyApi:
  *
  *   inviter: const invite = await nearby.createInvite({ gameId })  -> show invite.url as a QR code
  *   guest:   const reply = await nearby.answerInvite(scannedText)  -> show reply.url as a QR code;

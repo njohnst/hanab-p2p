@@ -67,7 +67,7 @@ export default function ConnectionIndicator() {
   const { playerId } = useSession();
   const [open, setOpen] = useState(false);
   const [inviting, setInviting] = useState(false);
-  const nearby = useNetworkMode() === "nearby";
+  const canConnectByQr = useNetworkMode() !== "local";
 
   if (!game || !connection || connection.status === "local") {
     return null;
@@ -89,10 +89,10 @@ export default function ConnectionIndicator() {
     label = t("connectionConnecting");
   } else if (humans.length === 0) {
     tone = "good";
-    label = nearby ? t("nearby.indicator") : t("connectionOnline");
+    label = t("connectionOnline");
   } else {
     tone = onlineCount === humans.length ? "good" : "partial";
-    label = t(nearby ? "nearby.playersNearby" : "playersOnline", { online: onlineCount, total: humans.length });
+    label = t("playersOnline", { online: onlineCount, total: humans.length });
   }
 
   function onInvite() {
@@ -118,7 +118,7 @@ export default function ConnectionIndicator() {
               connection={connection}
               presence={presence}
               selfPlayerId={playerId}
-              onInvite={nearby ? onInvite : undefined}
+              onInvite={canConnectByQr ? onInvite : undefined}
             />
           </ArrowContainer>
         )}
@@ -214,7 +214,7 @@ function ConnectionDetails(props: DetailsProps) {
 
       {onInvite && (
         <Button primary className="mt2 w-100" id="invite-nearby-player" size={ButtonSize.TINY} onClick={onInvite}>
-          <Txt size={TxtSize.XSMALL} value={t("nearby.invite.button")} />
+          <Txt size={TxtSize.XSMALL} value={t("unified.connectByQr")} />
         </Button>
       )}
     </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { NearbyInvite, NearbyInviteModal } from "~/components/nearbyInvite";
+import { NearbyInviteModal } from "~/components/nearbyInvite";
 import QrCode from "~/components/qrCode";
 import Button, { ButtonSize } from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
@@ -11,32 +11,16 @@ import { absoluteGameUrl } from "~/lib/routes";
 interface Props {
   gameId: string;
   className?: string;
-  /**
-   * The player just asked to invite (the in-game menu's "Invite players"): in nearby mode, start
-   * the invitation at once instead of offering a button for it.
-   */
-  inviteNow?: boolean;
+  /** Let the game own the QR dialog so it survives menu/turn changes. */
+  onConnectByQr?: () => void;
 }
 
-/**
- * Invite panel for network games. Online: a QR code of the game link, the link itself, a Copy
- * button and, where the device supports it, the native Share sheet. In nearby mode (no internet),
- * the game link would lead nowhere: players are invited with the nearby QR handshake instead
- * (~/components/nearbyInvite).
- */
+/** The same room link and optional QR connection handshake in every network game. */
 export default function ShareGame(props: Props) {
-  const mode = useNetworkMode();
-
-  if (mode === null) {
-    return null;
-  }
-
-  return mode === "nearby" ? <NearbyShareGame {...props} /> : <OnlineShareGame {...props} />;
-}
-
-function OnlineShareGame(props: Props) {
-  const { gameId, className = "" } = props;
+  const { gameId, className = "", onConnectByQr } = props;
   const { t } = useTranslation();
+  const mode = useNetworkMode();
+  const [inviting, setInviting] = useState(false);
 
   // Browser-only values, resolved after mount so pre-rendered markup matches.
   const [url, setUrl] = useState<string>(null);
@@ -70,48 +54,37 @@ function OnlineShareGame(props: Props) {
   }
 
   return (
-    <div className={`flex flex-column flex-row-ns items-center ${className}`}>
-      <QrCode
-        className="share-qr bg-white br2 pa1 flex-shrink-0 mb3 mb0-ns mr3-ns"
-        label={t("scanToJoin")}
-        text={url}
-      />
-      <div className="flex flex-column items-center items-start-ns mw6">
-        <Txt className="mb1" value={t("shareGame")} />
-        <Txt className="lavender mb2" size={TxtSize.SMALL} value={t("scanToJoin")} />
-        <a className="lavender mb2 tc tl-ns" href={url} rel="noopener noreferrer" style={{ wordBreak: "break-all" }}>
-          <Txt size={TxtSize.SMALL} value={url} />
-        </a>
-        <div className="flex">
-          <Button outlined size={ButtonSize.SMALL} text={copied ? t("copied") : t("copy")} onClick={onCopy} />
-          {canShare && <Button className="ml2" size={ButtonSize.SMALL} text={t("share")} onClick={onShare} />}
+    <div className={`flex flex-column items-center ${className}`}>
+      <div className="flex flex-column flex-row-ns items-center">
+        <QrCode
+          className="share-qr bg-white br2 pa1 flex-shrink-0 mb3 mb0-ns mr3-ns"
+          label={t("scanToJoin")}
+          text={url}
+        />
+        <div className="flex flex-column items-center items-start-ns mw6">
+          <Txt className="mb1" value={t("shareGame")} />
+          <Txt className="lavender mb2" size={TxtSize.SMALL} value={t("scanToJoin")} />
+          <a className="lavender mb2 tc tl-ns" href={url} rel="noopener noreferrer" style={{ wordBreak: "break-all" }}>
+            <Txt size={TxtSize.SMALL} value={url} />
+          </a>
+          <div className="flex">
+            <Button outlined size={ButtonSize.SMALL} text={copied ? t("copied") : t("copy")} onClick={onCopy} />
+            {canShare && <Button className="ml2" size={ButtonSize.SMALL} text={t("share")} onClick={onShare} />}
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function NearbyShareGame(props: Props) {
-  const { gameId, className = "", inviteNow = false } = props;
-  const { t } = useTranslation();
-  const [inviting, setInviting] = useState(false);
-
-  if (inviteNow) {
-    return <NearbyInvite className={className} gameId={gameId} />;
-  }
-
-  // The lobby: the invitation (camera, two QR codes) is too tall to fit in it, so it opens in a dialog.
-  return (
-    <div className={`flex flex-column items-center items-start-ns ${className}`}>
-      <Txt className="mb1" value={t("invitePlayers")} />
-      <Txt className="lavender mb2 tc tl-ns" size={TxtSize.SMALL} value={t("nearby.invite.lobbyHint")} />
-      <Button
-        primary
-        id="invite-nearby"
-        size={ButtonSize.SMALL}
-        text={t("nearby.invite.button")}
-        onClick={() => setInviting(true)}
-      />
+      {mode && mode !== "local" && (
+        <div className="mt3 tc mw6">
+          <Txt className="db lavender mb2" size={TxtSize.SMALL} value={t("unified.connectionHint")} />
+          <Button
+            outlined
+            id="connect-by-qr"
+            size={ButtonSize.SMALL}
+            text={t("unified.connectByQr")}
+            onClick={onConnectByQr ?? (() => setInviting(true))}
+          />
+        </div>
+      )}
       {inviting && <NearbyInviteModal gameId={gameId} onClose={() => setInviting(false)} />}
     </div>
   );

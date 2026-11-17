@@ -29,34 +29,17 @@ import { cheat } from "~/lib/ai-cheater";
 import { logEvent } from "~/lib/analytics";
 import { logFailedPromise } from "~/lib/errors";
 import { uniqueId } from "~/lib/id";
-import {
-  getNetworkMode,
-  isAuthority,
-  setNotification,
-  setReaction,
-  subscribeToConnection,
-  updateGame,
-} from "~/lib/network";
-import { gameUrl, summaryUrl, withBasePath } from "~/lib/routes";
+import { isAuthority, setNotification, setReaction, subscribeToConnection, updateGame } from "~/lib/network";
+import { gameUrl, summaryUrl } from "~/lib/routes";
 import IGameState, { GameMode, IAction, IGameHintsLevel, IGameStatus, IPlayer } from "~/lib/state";
 
 interface Props {
   onGameChange: (game: IGameState) => void;
 }
 
-/**
- * Open the next game (a rematch). Online, with a page load, as upstream has done since it dropped
- * router.push here, when the page kept the previous game's state (the play page now remounts
- * everything for a new game id, but the online behaviour is left as it was). In nearby mode, a
- * page load would close the links to the other devices, and only a new QR exchange brings them
- * back: the router it is.
- */
+/** Remount the game through the router, keeping all internet and QR connections alive. */
 function openGame(gameId: string) {
-  if (getNetworkMode() === "nearby") {
-    Router.push(gameUrl(gameId)).catch(logFailedPromise);
-  } else {
-    location.assign(withBasePath(gameUrl(gameId)));
-  }
+  Router.push(gameUrl(gameId)).catch(logFailedPromise);
 }
 
 export function Game(props: Props) {
