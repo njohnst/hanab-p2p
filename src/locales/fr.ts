@@ -24,7 +24,7 @@ export const fr = {
   copy: "Copier",
   copied: "Copié !",
   share: "Partager",
-  scanToJoin: "Scanne ce code avec l'appareil photo d'un téléphone pour rejoindre",
+  scanToJoin: "Scanne ce QR code de la partie pour la rejoindre",
   invitePlayers: "Inviter des joueurs",
   connectingToGame: "Connexion à la partie…",
   waitingForGameShare: "En attente d'un autre joueur pour la partager…",
@@ -65,15 +65,24 @@ export const fr = {
   },
   unified: {
     connectionHint:
-      "Les joueurs se connectent automatiquement quand internet est disponible. Sinon, échange des QR codes de connexion avec un joueur à côté de toi.",
+      "Les joueurs se connectent automatiquement quand internet est disponible. Sans internet, montre ton QR code de connexion à un joueur sur le même Wi-Fi ou partage de connexion, puis scanne son QR code de réponse.",
     connectByQr: "Connecter par QR",
     scanQr: "Scanner un QR de partie ou de connexion",
     qrExplanation:
-      "Utilise ceci si le lien de la partie ne te connecte pas automatiquement. Sur le même Wi-Fi ou partage de connexion, scanne l’invitation de connexion d’un joueur, laisse-le scanner ta réponse, puis touche Connecter maintenant sur les deux téléphones.",
+      "Utilise ceci si le lien de la partie ne te connecte pas automatiquement. Sur le même Wi-Fi ou partage de connexion, scanne le QR code de connexion d’un joueur, laisse-le scanner ton QR code de réponse, puis touche Connecter maintenant sur les deux téléphones.",
     gameExplanation:
       "Partage le lien ou le QR code de la partie. Connectez-vous automatiquement par internet, ou échangez des QR codes de connexion sur le même Wi-Fi sans internet.",
-    waiting:
-      "Garde cette page ouverte pendant qu’un joueur partage la partie. Si vous êtes ensemble et que la connexion automatique échoue, demande-lui d’ouvrir Connecter par QR et scanne son invitation de connexion.",
+    connectingOnline: "Connexion en ligne…",
+    connectingHelp: "Garde cet écran ouvert pendant la connexion. La partie s’ouvrira automatiquement.",
+    waitingForData: "Connexion établie. En attente des données de la partie…",
+    noPlayersConnected: "Aucun joueur connecté pour l’instant",
+    keepInviterOpen:
+      "Demande au joueur qui t’a invité de garder la partie ouverte. On continue d’essayer de te connecter.",
+    nearbyWaiting: "Demande au joueur qui t’a invité de te montrer son QR code de connexion.",
+    offlinePrompt: "Vous êtes ensemble sans internet ?",
+    connectWithoutInternet: "Se connecter sans internet",
+    offlineScanHint:
+      "Demande au joueur qui t’a invité d’ouvrir Connecter par QR. Scanne son QR code de connexion, puis montre-lui ton QR code de réponse.",
   },
   nearby: {
     troubleshooting: {
@@ -152,9 +161,9 @@ export const fr = {
       title: "Connecter par QR",
       button: "Inviter à proximité",
       lobbyHint: "Il scanne un QR code sur ton écran : pas besoin d'internet.",
-      step1: "1. Demande-lui de scanner ce code avec son appareil photo",
-      step2: "2. Puis scanne le code qui apparaît sur son écran",
-      qrLabel: "QR code d'invitation",
+      step1: "1. Demande-lui de scanner ce QR code de connexion",
+      step2: "2. Scanne le QR code de réponse sur son écran",
+      qrLabel: "QR code de connexion",
       allowCamera: "Autorise la caméra : elle sert à scanner sa réponse, et aide les appareils à se trouver.",
       skipCamera: "Continuer sans la caméra",
       preparing: "Préparation de l'invitation…",
@@ -182,7 +191,7 @@ export const fr = {
     answer: {
       title: "Rejoindre une partie à proximité",
       preparing: "Préparation de ta réponse…",
-      show: "Montre ce code au joueur qui t'a invité",
+      show: "Montre ce QR code de réponse au joueur qui t’a invité",
       qrLabel: "QR code de réponse",
       hint: "Il le scanne depuis son écran d'invitation. La partie s'ouvre ici dès que vous êtes connectés.",
       waiting: "En attente de son scan…",
@@ -211,7 +220,7 @@ export const fr = {
       title: "Rejoindre une partie à proximité",
       explanation:
         "Demande à un joueur de la partie d'afficher son invitation (☰ → Inviter des joueurs), puis scanne-la.",
-      scanHint: "Scanne l'invitation sur son écran",
+      scanHint: "Scanne un QR code de partie ou le QR code de connexion du joueur qui t’a invité",
       offer: "Pas d'internet ? Jouer à proximité",
       notNearby: "Ce n'est pas une invitation de proximité. Demandes-en une : ☰ → Inviter des joueurs.",
       reply: "C'est une réponse : elle doit être scannée par l'appareil qui affiche l'invitation.",

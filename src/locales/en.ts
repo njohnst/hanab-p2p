@@ -30,7 +30,7 @@ export const en = {
   copy: "Copy",
   copied: "Copied!",
   share: "Share",
-  scanToJoin: "Scan this code with a phone camera to join",
+  scanToJoin: "Scan this game QR code to join",
   invitePlayers: "Invite players",
   connectingToGame: "Connecting to the game…",
   waitingForGameShare: "Waiting for another player to share it…",
@@ -70,15 +70,23 @@ export const en = {
   },
   unified: {
     connectionHint:
-      "Players connect automatically when internet is available. If you cannot connect, exchange connection QR codes with a player beside you.",
+      "Players connect automatically when internet is available. Without internet, show your connection QR code to a player on the same Wi-Fi or hotspot, then scan their reply QR code.",
     connectByQr: "Connect by QR",
     scanQr: "Scan a room or connection QR code",
     qrExplanation:
-      "Use this when the room link cannot connect you automatically. On the same Wi-Fi or hotspot, scan a player’s connection invitation, let them scan your reply, then tap Connect now on both phones.",
+      "Use this when the room link cannot connect you automatically. On the same Wi-Fi or hotspot, scan a player’s connection QR code, let them scan your reply QR code, then tap Connect now on both phones.",
     gameExplanation:
       "Share the room link or QR code with your friends. Connect automatically over the internet, or exchange connection QR codes on the same Wi-Fi without internet.",
-    waiting:
-      "Keep this page open while another player shares the game. If you are together and cannot connect automatically, ask them to open Connect by QR and scan their connection invitation.",
+    connectingOnline: "Connecting online…",
+    connectingHelp: "Keep this screen open while we connect you. The game opens automatically.",
+    waitingForData: "Connected. Waiting for game data…",
+    noPlayersConnected: "No players connected yet",
+    keepInviterOpen: "Ask the player who invited you to keep the game open. We’ll keep trying to connect.",
+    nearbyWaiting: "Ask the player who invited you to show their connection QR code.",
+    offlinePrompt: "Together without internet?",
+    connectWithoutInternet: "Connect without internet",
+    offlineScanHint:
+      "Ask the player who invited you to open Connect by QR. Scan their connection QR code, then show them your reply QR code.",
   },
   nearby: {
     troubleshooting: {
@@ -155,9 +163,9 @@ export const en = {
       title: "Connect by QR",
       button: "Invite a nearby player",
       lobbyHint: "They scan a QR code on your screen: no internet needed.",
-      step1: "1. Ask them to scan this code with their camera",
-      step2: "2. Then scan the code that appears on their screen",
-      qrLabel: "Invitation QR code",
+      step1: "1. Ask them to scan this connection QR code",
+      step2: "2. Scan the reply QR code on their screen",
+      qrLabel: "Connection QR code",
       allowCamera: "Allow the camera: you'll need it to scan their reply, and it helps the devices find each other.",
       skipCamera: "Continue without the camera",
       preparing: "Preparing the invitation…",
@@ -182,7 +190,7 @@ export const en = {
     answer: {
       title: "Join a nearby game",
       preparing: "Preparing your reply…",
-      show: "Show this code to the player who invited you",
+      show: "Show this reply QR code to the player who invited you",
       qrLabel: "Reply QR code",
       hint: "They scan it from their invitation screen. The game opens here once you're connected.",
       waiting: "Waiting for them to scan it…",
@@ -210,7 +218,7 @@ export const en = {
     join: {
       title: "Join a nearby game",
       explanation: "Ask a player in the game to show their invitation (☰ → Invite players), then scan it.",
-      scanHint: "Scan the invitation on their screen",
+      scanHint: "Scan a game QR code or the inviter’s connection QR code",
       offer: "No internet? Play nearby",
       notNearby: "That's not a nearby invitation. Ask them for one: ☰ → Invite players.",
       reply: "That's a reply: it must be scanned by the device that shows the invitation.",

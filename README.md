@@ -85,9 +85,9 @@ internet. The devices talk to each other directly, with no server in between.
 1. On the home page, tap **Create a room**, just as you would with internet.
 2. In the lobby’s share panel, tap **Connect by QR** and allow the camera: you'll need it to scan the
    reply, and it helps the devices find each other on some networks.
-3. The other player scans the connection invitation with their phone's camera app, or in the app
-   (**Join a room → Scan a room or connection QR code**). Their screen then shows a reply code.
-   If they already opened the ordinary room link, **Connect by QR** is also on its waiting screen.
+3. The other player scans the connection QR code with their phone's camera app, or in the app
+   (**Join a room → Scan a room or connection QR code**). Their screen then shows a reply QR code.
+   If they already opened the ordinary room link, the waiting screen offers **Connect without internet**.
 4. Scan the reply in the same dialog. On the other phone, tap **The other phone has scanned my reply**.
 5. Once both phones show **Ready to connect**, tap **Connect now** on both at roughly the same time.
    The game opens on the guest’s screen when connected.

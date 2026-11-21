@@ -148,14 +148,21 @@ describe("creating and sharing a game", () => {
     expectConverged([a, b]);
   });
 
-  it("loadGame waits for a peer to share the game, or resolves null after the timeout", async () => {
+  it("loadGame can time out while a game subscription keeps listening", async () => {
     await host("a", lobbyGame());
     const b = peer("b");
     const loading = b.node.loadGame(G);
-    const missing = b.node.loadGame("Unknown", { timeoutMs: 1000 });
+    const delayedGame = "DelayedGame";
+    b.follow(delayedGame);
+    const missing = b.node.loadGame(delayedGame, { timeoutMs: 1000 });
     await settle(1500);
     await expect(loading).resolves.toMatchObject({ id: G });
     await expect(missing).resolves.toBeNull();
+    expect(b.game(delayedGame)).toBeNull();
+
+    await host("c", lobbyGame({ id: delayedGame }));
+    await settle();
+    expect(b.game(delayedGame)).toMatchObject({ id: delayedGame, synced: true });
   });
 
   it("is alone (and the authority of its replica) when nobody else is in the room", async () => {

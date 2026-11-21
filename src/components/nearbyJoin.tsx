@@ -54,6 +54,7 @@ export async function handOffReply(text: string): Promise<HandoffOutcome> {
 interface JoinProps {
   /** An invitation to answer at once (the page was opened with it), as a URL or code. */
   initialInvite?: string | null;
+  scanHint?: string;
 }
 
 /**
@@ -61,7 +62,7 @@ interface JoinProps {
  * join page in nearby mode.
  */
 export default function NearbyJoin(props: JoinProps) {
-  const { initialInvite = null } = props;
+  const { initialInvite = null, scanHint } = props;
   const router = useRouter();
   const { t } = useTranslation();
   const [invite, setInvite] = useState<{ text: string; id: number } | null>(
@@ -106,7 +107,7 @@ export default function NearbyJoin(props: JoinProps) {
   return (
     <div className="flex flex-column items-center w-100">
       {/* The camera waits for a tap: the page may be open for other reasons than scanning. */}
-      <QrScanner autoStart={false} hint={t("nearby.join.scanHint")} onResult={onResult} />
+      <QrScanner autoStart={false} hint={scanHint ?? t("nearby.join.scanHint")} onResult={onResult} />
       {notice && <Txt className="light-red tc mt2" role="alert" size={TxtSize.SMALL} value={t(notice)} />}
     </div>
   );

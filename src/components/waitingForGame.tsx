@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import NearbyJoin from "~/components/nearbyJoin";
 import HomeButton from "~/components/homeButton";
+import NearbyJoin from "~/components/nearbyJoin";
 import Button, { ButtonSize } from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
 import { useNetworkMode } from "~/hooks/networkMode";
@@ -22,43 +22,55 @@ interface Props {
 export default function WaitingForGame(props: Props) {
   const { gameId, notSharedYet, connection } = props;
   const { t } = useTranslation();
-  const canScan = useNetworkMode() !== "local";
+  const mode = useNetworkMode();
   const [scanning, setScanning] = useState(false);
 
-  const peersCount = connection?.peers.length ?? 0;
+  const hasPeers = !!connection?.peers.length;
+  const canShowFallback = (mode === "webrtc" || mode === "nearby") && (!hasPeers || scanning);
+  let title = t("unified.connectingOnline");
+  let detail = t("unified.connectingHelp");
 
-  const longMessage = t("unified.waiting");
+  if (hasPeers) {
+    title = t("unified.waitingForData");
+    detail = null;
+  } else if (notSharedYet && mode !== "local") {
+    title = t("unified.noPlayersConnected");
+    detail = t("unified.keepInviterOpen");
+  } else if (mode === "nearby") {
+    title = t("connectingToGame");
+    detail = t("unified.nearbyWaiting");
+  } else if (mode === "local") {
+    title = t("connectingToGame");
+    detail = t(notSharedYet ? "waitingForGameShareLong" : "waitingForGameShare");
+  }
 
   return (
     <div className="relative w-100 h-100 overflow-y-auto flex flex-column justify-center items-center bg-main-dark pa3 pv4-l ph3-l shadow-5 br3 tc">
       <HomeButton className="absolute top-1 right-1" />
-      <Txt size={TxtSize.MEDIUM} value={t("connectingToGame", "Connecting to the game…")} />
-      <Txt
-        className="lavender mt3"
-        value={notSharedYet ? longMessage : t("waitingForGameShare", "Waiting for another player to share it…")}
-      />
-      {canScan && peersCount === 0 && (
-        <Button
-          primary
-          className="mt3"
-          size={ButtonSize.SMALL}
-          text={t("unified.connectByQr")}
-          onClick={() => setScanning(!scanning)}
-        />
-      )}
-      {scanning && (
-        <div className="mt3 w-100 mw6">
-          <NearbyJoin />
+      <div className="flex flex-column mw6" role="status">
+        <Txt size={TxtSize.MEDIUM} value={title} />
+        {detail && <Txt className="lavender mt3" value={detail} />}
+      </div>
+      {canShowFallback && (
+        <div className="mt4 w-100 mw6">
+          {mode === "webrtc" && !scanning && (
+            <Txt className="db lavender mb2" size={TxtSize.SMALL} value={t("unified.offlinePrompt")} />
+          )}
+          <Button
+            outlined
+            aria-expanded={scanning}
+            size={ButtonSize.SMALL}
+            text={t("unified.connectWithoutInternet")}
+            onClick={() => setScanning((current) => !current)}
+          />
+          {scanning && (
+            <div className="mt3">
+              <NearbyJoin scanHint={t("unified.offlineScanHint")} />
+            </div>
+          )}
         </div>
       )}
       <Txt className="gray mt3" size={TxtSize.XSMALL} value={gameId} />
-      {connection && connection.status !== "local" && (
-        <Txt
-          className="gray mt1"
-          size={TxtSize.XSMALL}
-          value={t("connectedPeers", "{{count}} player(s) connected", { count: peersCount })}
-        />
-      )}
       {connection?.error && <Txt className="red mt3" value={connection.error} />}
     </div>
   );
