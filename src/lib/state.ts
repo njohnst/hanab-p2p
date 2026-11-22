@@ -25,10 +25,25 @@ export default interface IGameState {
   createdAt: number;
   startedAt?: number;
   endedAt?: number;
+  // Legacy matches may lack an identity, a known rollback total, or an explicit outcome.
+  matchId?: string;
+  undoCount?: number;
+  outcome?: GameOutcome;
+  forfeit?: ForfeitRequest;
   synced: boolean;
   // Replay mode
   originalGame?: IGameState;
   nextGameId?: string;
+}
+
+export type GameOutcome = "completed" | "forfeited";
+
+export interface ForfeitRequest {
+  id: string;
+  requesterId: string;
+  approvedBy: string[];
+  // Keep the latest closed request so delayed proposals cannot reopen it.
+  closed?: true;
 }
 
 /**
@@ -212,19 +227,26 @@ export function rebuildGame(state: Partial<IGameState>) {
     return null;
   }
 
-  let newState = newGame(state.options);
+  let newState = newGame(state.options, state);
 
   state.players.forEach((player) => {
     newState = joinGame(newState, player);
   });
 
   state.turnsHistory.forEach((turn) => {
-    newState = commitAction(newState, turn.action);
+    newState = commitAction(newState, { ...turn.action });
   });
 
   newState.messages = state.messages;
   newState.status = state.status;
   newState.createdAt = state.createdAt;
+  // The replay can reach a natural ending, but only the saved metadata describes the match.
+  delete newState.endedAt;
+  delete newState.outcome;
+  if (state.startedAt != null) newState.startedAt = state.startedAt;
+  if (state.endedAt != null) newState.endedAt = state.endedAt;
+  if (state.outcome != null) newState.outcome = state.outcome;
+  if (state.forfeit != null) newState.forfeit = state.forfeit;
   newState.nextGameId = state.nextGameId ?? null;
   newState.reviewComments = state.reviewComments;
 

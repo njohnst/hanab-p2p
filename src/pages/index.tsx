@@ -208,6 +208,9 @@ export default function Home() {
               {t("learnHanabTime", "~5 mn")}
             </Txt>
           </Button>
+          <Link className="mb4 tc lavender" href="/history/">
+            {t("history.title", "Match history")}
+          </Link>
           {recentGames.length > 0 && (
             // Zero intrinsic width: takes the buttons' width rather than widening the column to fit long names
             <section aria-labelledby="recent-games-title" id="recent-games" style={{ width: 0, minWidth: "100%" }}>

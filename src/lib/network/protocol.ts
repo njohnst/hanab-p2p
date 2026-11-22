@@ -13,7 +13,7 @@ import { IGameStatus } from "~/lib/state";
 import { GameDocument } from "./document";
 import { PublicGame } from "./types";
 
-export const PROTOCOL = 1;
+export const PROTOCOL = 2;
 
 /** Messages larger than this (serialised) are dropped. A long game is ~20KB. */
 export const MAX_MESSAGE_CHARS = 512 * 1024;
@@ -146,6 +146,19 @@ function isArrayOf(value: unknown, max: number, check: (item: unknown) => boolea
 
 const isId = (value: unknown) => isString(value, MAX_ID_CHARS, 1);
 const isTimestamp = (value: unknown) => isFiniteNumber(value) && value >= 0;
+const isUuid = (value: unknown) =>
+  typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+function isForfeitRequest(value: unknown): boolean {
+  return (
+    isObject(value) &&
+    isUuid(value.id) &&
+    isId(value.requesterId) &&
+    isArrayOf(value.approvedBy, 5, isId) &&
+    new Set(value.approvedBy).size === value.approvedBy.length &&
+    (value.closed === undefined || value.closed === true)
+  );
+}
 
 function isOptions(value: unknown): boolean {
   return (
@@ -223,7 +236,15 @@ export function isGameDocument(value: unknown): value is GameDocument {
     isOptional(value.createdAt, isTimestamp) &&
     isOptional(value.startedAt, isTimestamp) &&
     isOptional(value.endedAt, isTimestamp) &&
-    isOptional(value.nextGameId, isId)
+    isOptional(value.nextGameId, isId) &&
+    isOptional(value.matchId, isUuid) &&
+    isOptional(value.undoCount, (v) => isInteger(v, 0, Number.MAX_SAFE_INTEGER)) &&
+    isOptional(
+      value.outcome,
+      (v) =>
+        value.status === IGameStatus.OVER && (v === "completed" || (v === "forfeited" && isTimestamp(value.endedAt)))
+    ) &&
+    isOptional(value.forfeit, isForfeitRequest)
   );
 }
 

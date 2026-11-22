@@ -32,11 +32,12 @@ import {
   toDocument,
   tryMaterialize,
 } from "./document";
-import { mergeGame } from "./merge";
+import { isForfeitProposal, mergeGame } from "./merge";
 import {
   AckMessage,
   GameMessage,
   HelloMessage,
+  isGameDocument,
   MAX_APPLIED_IDS,
   parseMessage,
   PROTOCOL,
@@ -587,7 +588,7 @@ export class GameSync {
   /**
    * Propose a new state. `source` is the version the writer's game was built
    * from (see SourceVersion): only what the writer changed relative to it is
-   * applied. Without it, or when it is too old, the current replica is the base.
+   * applied. A write without a source uses the current replica as its base.
    */
   write(proposed: GameDocument, source: SourceVersion | null = null) {
     if (this.closed) return;
@@ -597,6 +598,10 @@ export class GameSync {
     }
 
     const base = this.baseFor(source);
+    if (!base) {
+      this.onOwnRejected(this.ctx.newId(), "turn-conflict");
+      return;
+    }
     const entry: WriteEntry = {
       id: this.ctx.newId(),
       base: base.game,
@@ -648,12 +653,12 @@ export class GameSync {
     this.write(proposed);
   }
 
-  private baseFor(source: SourceVersion | null): StoredReplica {
+  private baseFor(source: SourceVersion | null): StoredReplica | null {
     const replica = this.replica;
     if (!source || source.gameId !== this.gameId) return replica;
     if (source.version === replica.version && source.author === replica.author) return replica;
     const seen = this.recent.find((state) => state.version === source.version && state.author === source.author);
-    return seen ?? replica;
+    return seen ?? null;
   }
 
   private setReplica(next: StoredReplica) {
@@ -819,7 +824,9 @@ export class GameSync {
       return;
     }
 
-    const result = mergeGame(entry.base, replica.game, entry.proposed);
+    const vote = isForfeitProposal(entry.base, entry.proposed);
+    const actor = vote ? (origin ? this.peers.get(origin)?.hello?.playerId : this.ctx.getPlayerId()) : null;
+    const result = mergeGame(entry.base, replica.game, entry.proposed, { actor, now: this.ctx.now });
     if (result.ok === false) {
       this.refuse(entry, origin, result.reason);
       return;
@@ -834,7 +841,7 @@ export class GameSync {
       }
       return;
     }
-    if (!tryMaterialize(result.game)) {
+    if (!isGameDocument(result.game) || !tryMaterialize(result.game)) {
       this.refuse(entry, origin, "invalid");
       return;
     }
@@ -996,6 +1003,12 @@ export class GameSync {
       if (entry.status !== "applied") return;
       if (truncated && entry.appliedVersion !== null && entry.appliedVersion < floor) {
         // Older than the ids the state carries: assume it is in.
+        return;
+      }
+      // The original voter re-sends its own vote if a different branch won.
+      // This tab cannot speak for a remote player on the new branch.
+      if (!entry.own && isForfeitProposal(entry.base, entry.proposed)) {
+        this.writes.delete(id);
         return;
       }
       entry.status = "pending";
@@ -1205,6 +1218,7 @@ export class GameSync {
 
   private handlePropose(peer: Peer, message: ProposeMessage) {
     const proposed = toDocument(message.proposed);
+    const base = toDocument(message.base);
     if (proposed.id !== this.gameId) return;
 
     if (!this.authority || !this.replica) {
@@ -1214,10 +1228,14 @@ export class GameSync {
       return;
     }
 
+    if (isForfeitProposal(base, proposed) && peer.hello?.authorKey !== message.authorKey) {
+      this.sendHello(peer.peerId);
+      return;
+    }
     const known = this.writes.get(message.proposalId);
     const entry: WriteEntry = known ?? {
       id: message.proposalId,
-      base: toDocument(message.base),
+      base,
       baseVersion: message.baseVersion,
       proposed,
       own: false,

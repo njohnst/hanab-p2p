@@ -4,6 +4,7 @@ import React, { useCallback, useContext, useEffect, useRef, useState } from "rea
 import { Trans, useTranslation } from "react-i18next";
 import { ActionAreaType, ISelectedArea } from "~/components/actionArea";
 import DiscardArea from "~/components/discardArea";
+import ForfeitVote from "~/components/forfeitVote";
 import GameBoard from "~/components/gameBoard";
 import Lobby from "~/components/lobby";
 import Logs from "~/components/logs";
@@ -50,6 +51,7 @@ export function Game(props: Props) {
   const [displayStats, setDisplayStats] = useState(false);
   const [reachableScore, setReachableScore] = useState<number>(null);
   const [interturn, setInterturn] = useState(false);
+  const [confirmingForfeit, setConfirmingForfeit] = useState(false);
   /**
    * The nearby invitation dialog opened from the menu. Its state lives here, not in MenuArea: the
    * menu closes whenever a turn is played, which would cancel an invitation mid-handshake.
@@ -144,22 +146,25 @@ export function Game(props: Props) {
    * that our cheating AI can achieve.
    */
   useEffect(() => {
-    if (![IGameStatus.ONGOING, IGameStatus.OVER].includes(game.status)) return;
+    if (![IGameStatus.ONGOING, IGameStatus.OVER].includes(game.status) || game.outcome === "forfeited") return;
 
-    let sameGame = newGame({
-      id: game.id,
-      playersCount: game.options.playersCount,
-      variant: game.options.variant,
-      allowRollback: false,
-      preventLoss: false,
-      seed: game.options.seed,
-      private: true,
-      hintsLevel: IGameHintsLevel.NONE,
-      botsWait: 1000,
-      turnsHistory: false,
-      gameMode: GameMode.NETWORK,
-      colorBlindMode: game.options.colorBlindMode,
-    });
+    let sameGame = newGame(
+      {
+        id: game.id,
+        playersCount: game.options.playersCount,
+        variant: game.options.variant,
+        allowRollback: false,
+        preventLoss: false,
+        seed: game.options.seed,
+        private: true,
+        hintsLevel: IGameHintsLevel.NONE,
+        botsWait: 1000,
+        turnsHistory: false,
+        gameMode: GameMode.NETWORK,
+        colorBlindMode: game.options.colorBlindMode,
+      },
+      {}
+    );
 
     game.players.forEach((player) => {
       sameGame = joinGame(sameGame, {
@@ -176,6 +181,7 @@ export function Game(props: Props) {
     setReachableScore(getScore(sameGame));
   }, [
     game.status,
+    game.outcome,
     game.id,
     game.options.colorBlindMode,
     game.options.playersCount,
@@ -210,7 +216,7 @@ export function Game(props: Props) {
    * Display fireworks animation when game ends
    */
   useEffect(() => {
-    if (game.status !== IGameStatus.OVER) return;
+    if (game.status !== IGameStatus.OVER || game.outcome === "forfeited") return;
     if (!userPreferences.showFireworksAtGameEnd) return;
     const fireworks = new Fireworks(fireworksRef.current, {
       maxRockets: 5, // max # of rockets to spawn
@@ -226,7 +232,7 @@ export function Game(props: Props) {
     }, game.playedCards.length * 200); // stop rockets from spawning
 
     return () => clearTimeout(timeout);
-  }, [game.status, game.playedCards.length, userPreferences.showFireworksAtGameEnd]);
+  }, [game.status, game.outcome, game.playedCards.length, userPreferences.showFireworksAtGameEnd]);
 
   /**
    * Automatically start tutorial when player joins
@@ -324,6 +330,7 @@ export function Game(props: Props) {
   }
 
   async function onCommitAction(action: IAction) {
+    if (liveGame().status !== IGameStatus.ONGOING) return;
     const newState = commitAction(game, action);
 
     const misplay = getMaximumPossibleScore(game) !== getMaximumPossibleScore(newState);
@@ -498,12 +505,22 @@ export function Game(props: Props) {
     return game.originalGame || game;
   }
   const showNextGame = liveGame().nextGameId && true;
+  const live = liveGame();
+  const canForfeit =
+    live.status === IGameStatus.ONGOING && live.options.gameMode === GameMode.NETWORK && !live.options.tutorial;
+  const canRequestForfeit =
+    canForfeit &&
+    (!live.forfeit || live.forfeit.closed) &&
+    live.players.some((player) => !player.bot && player.id === playerId);
 
   return (
     <>
       <div className="game bg-main-dark relative flex flex-column w-100 h-100">
         <div className="bg-black-50 pa2 pv2-l ph6.5-m">
-          <GameBoard onMenuClick={onMenuClick} onRollbackClick={onRollbackClick} />
+          <GameBoard
+            onMenuClick={onMenuClick}
+            onRollbackClick={live.outcome === "forfeited" ? undefined : onRollbackClick}
+          />
         </div>
         <div className="flex flex-column bg-black-50 bb b--yellow ph6.5-m">
           {selectedArea.type === ActionAreaType.MENU && (
@@ -513,6 +530,14 @@ export function Game(props: Props) {
                 onCloseArea();
                 setInvitingNearby(true);
               }}
+              onRequestForfeit={
+                canRequestForfeit
+                  ? () => {
+                      onCloseArea();
+                      setConfirmingForfeit(true);
+                    }
+                  : undefined
+              }
             />
           )}
           {invitingNearby && <NearbyInviteModal gameId={game.id} onClose={() => setInvitingNearby(false)} />}
@@ -553,6 +578,15 @@ export function Game(props: Props) {
             </div>
           )}
         </div>
+
+        {canForfeit && (
+          <ForfeitVote
+            confirming={confirmingForfeit}
+            game={live}
+            playerId={playerId}
+            onDismiss={() => setConfirmingForfeit(false)}
+          />
+        )}
 
         {interturn && (
           <div className="flex-grow-1 flex flex-column items-center justify-center">
@@ -598,9 +632,13 @@ export function Game(props: Props) {
                   <Txt
                     className="db"
                     size={TxtSize.MEDIUM}
-                    value={t("gameOver", { playedCardsLength: liveGame().playedCards.length })}
+                    value={
+                      live.outcome === "forfeited"
+                        ? t("forfeitGameOver", "Game forfeited. Score {{score}}.", { score: live.playedCards.length })
+                        : t("gameOver", { playedCardsLength: live.playedCards.length })
+                    }
                   />
-                  {reachableScore && (
+                  {reachableScore && live.outcome !== "forfeited" && (
                     <Txt
                       multiline
                       className="db mt1 lavender"

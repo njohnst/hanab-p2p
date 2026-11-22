@@ -1,9 +1,10 @@
 import assert from "assert";
 import { cloneDeep, findIndex, flatMap, last, range, shuffle, zipObject } from "lodash";
-import mem from "mem";
 import { shuffle as shuffleSeed } from "shuffle-seed";
 import { generateShuffleSeed, nextGameId } from "./id";
 import IGameState, {
+  GameMode,
+  rebuildGame,
   GameVariant,
   IAction,
   ICard,
@@ -145,6 +146,7 @@ export function isGameOver(state: IGameState) {
 }
 
 export function commitAction<A extends IAction>(state: IGameState, action: A): IGameState {
+  if (state.status === IGameStatus.OVER) return state;
   const actionIsntFromCurrentPlayer = action.from !== state.currentPlayer;
   const isSelfHinting = isHintAction(action) && action.from == action.to;
   const isHintingWithoutTokens = action.action === "hint" && state.tokens.hints === 0;
@@ -221,6 +223,7 @@ export function commitAction<A extends IAction>(state: IGameState, action: A): I
   if (isGameOver(s)) {
     s.status = IGameStatus.OVER;
     s.endedAt = Date.now();
+    s.outcome = "completed";
   }
 
   return s;
@@ -234,31 +237,57 @@ export function sendMessage(state: IGameState, message: IMessage) {
   return newGame;
 }
 
-/**
- * Rollback the state for the given amount of turns
- */
-export const getStateAtTurn = mem(
-  (state: IGameState, turnIndex: number) => {
-    let newState = newGame(state.options);
+export type ForfeitAction = "request" | "approve" | "reject" | "cancel";
 
-    state.players.forEach((player) => {
-      newState = joinGame(newState, player);
-    });
-
-    state.turnsHistory.slice(0, turnIndex).forEach((turn) => {
-      newState = commitAction(newState, turn.action);
-    });
-
-    newState.messages = state.messages;
-    newState.status = IGameStatus.ONGOING;
-    newState.createdAt = state.createdAt;
-
-    return newState;
-  },
-  {
-    cacheKey: ([state, turn]) => `${state.id}-${turn}`,
+/** Describe one voter's intent. The authority validates and applies it to the live request. */
+export function forfeitProposal(game: IGameState, playerId: string, action: ForfeitAction): IGameState | null {
+  if (
+    game.status !== IGameStatus.ONGOING ||
+    game.options.gameMode !== GameMode.NETWORK ||
+    game.options.tutorial ||
+    !game.players.some((player) => player.id === playerId && !player.bot)
+  ) {
+    return null;
   }
-);
+
+  const request = game.forfeit;
+  if (action === "request") {
+    if (request && !request.closed) return null;
+    return { ...game, forfeit: { id: newUuid(), requesterId: playerId, approvedBy: [playerId] } };
+  }
+  if (!request || request.closed) return null;
+  if (action === "approve") {
+    if (request.approvedBy.includes(playerId)) return null;
+    return { ...game, forfeit: { ...request, approvedBy: [...request.approvedBy, playerId] } };
+  }
+  if ((action === "cancel") !== (request.requesterId === playerId)) return null;
+  return { ...game, forfeit: { ...request, closed: true } };
+}
+
+const statesAtTurn = new WeakMap<IGameState, Map<number, IGameState>>();
+
+/** Build a replay or rollback candidate. Only the authority counts an accepted rollback. */
+export function getStateAtTurn(state: IGameState, turnIndex: number): IGameState {
+  const cached = statesAtTurn.get(state) ?? new Map<number, IGameState>();
+  if (!statesAtTurn.has(state)) statesAtTurn.set(state, cached);
+  if (cached.has(turnIndex)) return cached.get(turnIndex);
+
+  const atTurn = {
+    ...state,
+    ...rebuildGame({
+      ...state,
+      turnsHistory: state.turnsHistory.slice(0, turnIndex),
+      status: IGameStatus.ONGOING,
+      endedAt: undefined,
+      outcome: undefined,
+    }),
+    endedAt: undefined,
+    outcome: undefined,
+    originalGame: undefined,
+  };
+  cached.set(turnIndex, atTurn);
+  return atTurn;
+}
 
 export function getColors(variant: GameVariant) {
   switch (variant) {
@@ -348,7 +377,18 @@ export function joinGame(state: IGameState, player: IPlayer): IGameState {
   return game;
 }
 
-export function newGame(options: IGameOptions): IGameState {
+function newUuid(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export function newGame(
+  options: IGameOptions,
+  metadata: Pick<IGameState, "matchId" | "undoCount"> = { matchId: newUuid(), undoCount: 0 }
+): IGameState {
   assert(options.playersCount > 1 && options.playersCount < 6);
 
   // All base cards
@@ -432,6 +472,8 @@ export function newGame(options: IGameOptions): IGameState {
   const currentPlayer = shuffleSeed(range(options.playersCount), options.seed)[0];
 
   return {
+    ...(metadata.matchId != null && { matchId: metadata.matchId }),
+    ...(metadata.undoCount != null && { undoCount: metadata.undoCount }),
     id: options.id,
     status: IGameStatus.LOBBY,
     playedCards: [],

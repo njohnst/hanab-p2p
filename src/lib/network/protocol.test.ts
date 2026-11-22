@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { IGameStatus } from "~/lib/state";
+import { forfeitProposal, getStateAtTurn, recreateGame } from "~/lib/actions";
+import { IGameStatus, rebuildGame } from "~/lib/state";
 import { documentOf, materialize, SOURCE_VERSION, sourceOf, stampSource, toDocument, tryMaterialize } from "./document";
 import { MAX_MESSAGE_CHARS, parseMessage, PROTOCOL } from "./protocol";
 import { move, startedGame } from "./testing";
@@ -116,7 +117,7 @@ describe("game documents", () => {
     expect(toDocument(JSON.parse(JSON.stringify(game)))).toEqual(game);
   });
 
-  it("rebuild hands and piles, and keep startedAt/endedAt (which rebuildGame drops)", () => {
+  it("rebuild hands and piles while keeping the saved start and end times", () => {
     const over = { ...game, status: IGameStatus.OVER, startedAt: 111, endedAt: 222 };
     const rebuilt = materialize(over);
     expect(rebuilt.startedAt).toBe(111);
@@ -128,6 +129,32 @@ describe("game documents", () => {
     const ongoing = materialize(game);
     expect(ongoing.startedAt).toBe(1000);
     expect("endedAt" in ongoing).toBe(false);
+  });
+
+  it("preserves the match UUID during reconstruction and assigns a fresh one to a rematch", () => {
+    const live = materialize(game);
+    expect(rebuildGame(game).matchId).toBe(game.matchId);
+    expect(getStateAtTurn(live, 0)).toMatchObject({ matchId: game.matchId, undoCount: 0, startedAt: 1000 });
+    const next = recreateGame(live);
+    expect(next.matchId).not.toBe(game.matchId);
+    expect(next.undoCount).toBe(0);
+    expect(parseMessage(state({ game: documentOf(next) })).kind).toBe("ok");
+  });
+
+  it("validates optional match metadata and the vote shape", () => {
+    const live = materialize(game);
+    const pending = documentOf(forfeitProposal(live, "alice", "request"));
+    expect(parseMessage(state({ game: pending })).kind).toBe("ok");
+    [
+      { matchId: "not-a-uuid" },
+      { undoCount: -1 },
+      { undoCount: 1.5 },
+      { outcome: "other" },
+      { outcome: "forfeited" },
+      { forfeit: { ...pending.forfeit, approvedBy: ["alice", "alice"] } },
+    ].forEach((metadata) => {
+      expect(parseMessage(state({ game: { ...pending, ...metadata } })).kind).toBe("invalid");
+    });
   });
 
   it("refuse to rebuild documents whose turns are not legal", () => {

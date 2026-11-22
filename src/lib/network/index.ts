@@ -22,8 +22,11 @@
  * and isNearbyGame.
  */
 import { cloneDeep } from "lodash";
+import { ForfeitAction, forfeitProposal } from "~/lib/actions";
+import { getPlayerId } from "~/lib/playerId";
 import IGameState, { IPlayer } from "~/lib/state";
 import { BrowserNetwork, createBrowserNetwork, selectTransportKind } from "./browser";
+import { sourceOf } from "./document";
 import { isRememberedNearbyGame } from "./nearby/games";
 import { deliverReplyToOtherTab as deliverReply } from "./nearby/links";
 import { NearbyApi } from "./nearby/types";
@@ -118,6 +121,13 @@ export async function updateGame(game: IGameState): Promise<void> {
   // Debugging convenience kept from the previous backends: the last written game.
   window["hanab"] = cloneDeep(game);
   await node.updateGame(game);
+}
+
+/** Send one request or vote from the synced live state. Subscribers show the authority's decision. */
+export async function voteForfeit(game: IGameState, action: ForfeitAction): Promise<void> {
+  if (!game.synced || game.originalGame || !sourceOf(game)) return;
+  const proposal = forfeitProposal(game, getPlayerId(), action);
+  if (proposal) await updateGame(proposal);
 }
 
 /** Set (or clear with null) a player's emoji reaction. Never lost to concurrent updates. */

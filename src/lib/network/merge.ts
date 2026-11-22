@@ -11,18 +11,14 @@
  * Pure: inputs are not modified, the result shares no object with them.
  */
 import { cloneDeep, isEqual } from "lodash";
+import { isGameOver } from "~/lib/actions";
 import IGameState, { IGameStatus, IMessage, IPlayer, IReviewComment, ITurn } from "~/lib/state";
-import { GameDocument, toDocument } from "./document";
+import { GameDocument, isLocalGame, toDocument, tryMaterialize } from "./document";
 import { RejectionReason } from "./types";
 
-export type MergeResult =
-  | { ok: true; game: GameDocument; changed: boolean }
-  | { ok: false; reason: Exclude<RejectionReason, "invalid"> };
+export type MergeResult = { ok: true; game: GameDocument; changed: boolean } | { ok: false; reason: RejectionReason };
 
 type Input = GameDocument | Partial<IGameState>;
-
-/** Fields taken from `proposed` when the writer changed them, else kept from `current`. */
-const SCALAR_FIELDS = ["status", "options", "startedAt", "endedAt", "nextGameId"] as const;
 
 function isPrefix(prefix: ITurn[], turns: ITurn[]): boolean {
   return prefix.length <= turns.length && isEqual(prefix, turns.slice(0, prefix.length));
@@ -72,10 +68,11 @@ function mergePlayers(
       return;
     }
 
-    // Apply the fields the writer changed (name, reaction, notified, bot...).
+    // Seat type is fixed once play starts. It also determines who can vote.
     const basePlayer = baseById.get(proposedPlayer.id);
     const keys = new Set([...Object.keys(basePlayer || {}), ...Object.keys(proposedPlayer)]);
     keys.delete("id");
+    if (current.status !== IGameStatus.LOBBY) keys.delete("bot");
     keys.forEach((key) => {
       const value = proposedPlayer[key];
       if (basePlayer && isEqual(value, basePlayer[key])) {
@@ -154,6 +151,58 @@ function mergeReviewComments(
   return merged;
 }
 
+export function isForfeitProposal(base: GameDocument, proposed: GameDocument): boolean {
+  return !isEqual(base.forfeit, proposed.forfeit);
+}
+
+function mergeForfeit(
+  base: GameDocument,
+  current: GameDocument,
+  proposed: GameDocument,
+  actor: string | null,
+  now: () => number
+): MergeResult {
+  const humans = current.players.filter((player) => !player.bot).map((player) => player.id);
+  const vote = proposed.forfeit;
+  const previous = current.forfeit;
+  if (isLocalGame(current) || !humans.includes(actor) || !vote || !isEqual(base.turnsHistory, proposed.turnsHistory)) {
+    return { ok: false, reason: "invalid" };
+  }
+  const unchanged = { ok: true, game: cloneDeep(current), changed: false } as const;
+  if (current.status !== IGameStatus.ONGOING) return unchanged;
+
+  const merged = cloneDeep(current);
+  if (!vote.closed && vote.id !== base.forfeit?.id) {
+    if (vote.requesterId !== actor || !isEqual(vote.approvedBy, [actor])) return { ok: false, reason: "invalid" };
+    // A request can only replace the last closed request the requester saw.
+    if (previous?.id !== base.forfeit?.id || (previous && !previous.closed)) return unchanged;
+    merged.forfeit = { id: vote.id, requesterId: actor, approvedBy: [actor] };
+  } else {
+    if (vote.id !== base.forfeit?.id || vote.requesterId !== base.forfeit.requesterId) {
+      return { ok: false, reason: "invalid" };
+    }
+    if (vote.id !== previous?.id || previous.closed || base.forfeit.closed) return unchanged;
+    if (vote.closed) {
+      if (!isEqual(vote.approvedBy, base.forfeit.approvedBy)) return { ok: false, reason: "invalid" };
+      merged.forfeit.closed = true;
+      return { ok: true, game: merged, changed: true };
+    }
+    if (!isEqual(vote.approvedBy, [...base.forfeit.approvedBy, actor]) || base.forfeit.approvedBy.includes(actor)) {
+      return { ok: false, reason: "invalid" };
+    }
+    if (previous.approvedBy.includes(actor)) return unchanged;
+    merged.forfeit.approvedBy.push(actor);
+  }
+
+  if (humans.every((id) => merged.forfeit.approvedBy.includes(id))) {
+    merged.forfeit.closed = true;
+    merged.status = IGameStatus.OVER;
+    merged.outcome = "forfeited";
+    merged.endedAt = now();
+  }
+  return { ok: true, game: merged, changed: true };
+}
+
 /**
  * Merge `proposed` (written on top of `base`) into `current`:
  *
@@ -169,22 +218,39 @@ function mergeReviewComments(
  * - messages: union by id, current order first.
  * - reviewComments: union keyed by (playerId, afterTurnNumber); proposed wins
  *   for the keys it changed, including deletions (rollbacks drop comments).
- * - status, options, startedAt, endedAt, nextGameId: proposed where it differs
- *   from base, else current.
+ * - lobby options and nextGameId: proposed where it differs from base, else current.
+ * - the authority derives match metadata from the accepted transition.
  *
  * `changed` tells whether the result differs from `current`.
  */
-export function mergeGame(baseInput: Input, currentInput: Input, proposedInput: Input): MergeResult {
+export function mergeGame(
+  baseInput: Input,
+  currentInput: Input,
+  proposedInput: Input,
+  { actor = null, now = Date.now }: { actor?: string | null; now?: () => number } = {}
+): MergeResult {
   const base = toDocument(baseInput);
   const current = toDocument(currentInput);
   const proposed = toDocument(proposedInput);
 
-  if (proposed.id !== current.id) {
+  if (proposed.id !== current.id || base.id !== current.id || (base.matchId && base.matchId !== current.matchId)) {
     return { ok: false, reason: "wrong-game" };
   }
+  if (isForfeitProposal(base, proposed)) return mergeForfeit(base, current, proposed, actor, now);
 
   const turnsHistory = mergeTurns(base.turnsHistory, current.turnsHistory, proposed.turnsHistory);
   if (!turnsHistory) {
+    return { ok: false, reason: "turn-conflict" };
+  }
+  const turnsChanged = !isEqual(turnsHistory, current.turnsHistory);
+  const rolledBack = turnsHistory.length < current.turnsHistory.length;
+  if (
+    turnsChanged &&
+    (base.undoCount !== current.undoCount ||
+      current.outcome === "forfeited" ||
+      (current.status === IGameStatus.OVER && !rolledBack) ||
+      (rolledBack && current.options.allowRollback === false))
+  ) {
     return { ok: false, reason: "turn-conflict" };
   }
 
@@ -201,14 +267,39 @@ export function mergeGame(baseInput: Input, currentInput: Input, proposedInput: 
     reviewComments: mergeReviewComments(base.reviewComments, current.reviewComments, proposed.reviewComments),
   };
 
-  SCALAR_FIELDS.forEach((field) => {
-    const value = isEqual(proposed[field], base[field]) ? current[field] : proposed[field];
-    if (value === undefined) {
-      delete merged[field];
-    } else {
-      ((merged as unknown) as Record<string, unknown>)[field] = cloneDeep(value);
-    }
-  });
+  if (current.status === IGameStatus.LOBBY && !isEqual(proposed.options, base.options)) {
+    merged.options = cloneDeep(proposed.options);
+  }
+  if (proposed.nextGameId !== base.nextGameId) {
+    if (proposed.nextGameId === undefined) delete merged.nextGameId;
+    else merged.nextGameId = proposed.nextGameId;
+  }
 
+  if (
+    current.status === IGameStatus.LOBBY &&
+    base.status === IGameStatus.LOBBY &&
+    proposed.status === IGameStatus.ONGOING
+  ) {
+    merged.status = IGameStatus.ONGOING;
+    if (proposed.startedAt != null) merged.startedAt = proposed.startedAt;
+  }
+  if (rolledBack) {
+    if (current.undoCount !== undefined) {
+      if (current.undoCount === Number.MAX_SAFE_INTEGER) return { ok: false, reason: "invalid" };
+      merged.undoCount = current.undoCount + 1;
+    }
+    merged.status = IGameStatus.ONGOING;
+    delete merged.endedAt;
+    delete merged.outcome;
+  } else if (turnsChanged) {
+    const state = tryMaterialize(merged);
+    if (!state) return { ok: false, reason: "invalid" };
+    if (isGameOver(state)) {
+      merged.status = IGameStatus.OVER;
+      merged.outcome = "completed";
+      merged.endedAt = now();
+      if (merged.forfeit) merged.forfeit.closed = true;
+    }
+  }
   return { ok: true, game: merged, changed: !isEqual(merged, current) };
 }

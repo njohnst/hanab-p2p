@@ -1,8 +1,8 @@
 import { cloneDeep } from "lodash";
 import { describe, expect, it } from "vitest";
-import { joinGame, sendMessage } from "~/lib/actions";
-import IGameState, { IGameStatus, IPlayer } from "~/lib/state";
-import { documentOf, GameDocument, materialize } from "./document";
+import { commitAction, forfeitProposal, joinGame, sendMessage } from "~/lib/actions";
+import IGameState, { GameMode, IGameStatus, IPlayer } from "~/lib/state";
+import { documentOf, GameDocument, materialize, toDocument } from "./document";
 import { mergeGame } from "./merge";
 import { lobbyGame, move, rollbackTo, startedGame } from "./testing";
 
@@ -59,6 +59,8 @@ describe("mergeGame: turnsHistory", () => {
     const result = merged(played, played, rolledBack);
     expect(result.turnsHistory).toHaveLength(1);
     expect(result.turnsHistory).toEqual(doc(played).turnsHistory.slice(0, 1));
+    expect(result.undoCount).toBe(1);
+    expect(rolledBack.undoCount).toBe(0);
   });
 
   it("refuses a proposal that rewrites history instead of adding or removing turns", () => {
@@ -84,9 +86,30 @@ describe("mergeGame: turnsHistory", () => {
 
   it("accepts the same rollback twice as a no-op", () => {
     const played = move(move(move(base)));
-    const rolledBack = rollbackTo(played, 1);
+    const rolledBack = materialize(merged(played, played, rollbackTo(played, 1)));
     const result = mergeGame(doc(played), doc(rolledBack), doc(rollbackTo(played, 1)));
     expect(result.ok && result.changed).toBe(false);
+    expect(result.ok && result.game.undoCount).toBe(1);
+  });
+
+  it("counts another rollback after replaying the same turns and ignores stale metadata", () => {
+    const played = move(move(move(base)));
+    const rolledBack = materialize(merged(played, played, rollbackTo(played, 1)));
+    const replayed = move(move(rolledBack));
+    const staleRollback = mergeGame(played, replayed, rollbackTo(played, 1));
+    expect(staleRollback).toEqual({ ok: false, reason: "turn-conflict" });
+
+    const staleChat = merged(played, replayed, { ...chat(played, "stale"), matchId: undefined, undoCount: 0 });
+    expect(staleChat).toMatchObject({ matchId: base.matchId, undoCount: 1 });
+    expect(merged(replayed, replayed, rollbackTo(replayed, 0)).undoCount).toBe(2);
+  });
+
+  it("keeps an unknown legacy rollback total unknown", () => {
+    const legacy = { ...move(base), matchId: undefined, undoCount: undefined };
+    const result = merged(legacy, legacy, rollbackTo(legacy, 0));
+    expect(result.turnsHistory).toHaveLength(0);
+    expect(result.undoCount).toBeUndefined();
+    expect(result.matchId).toBeUndefined();
   });
 
   it("rejects a different move for a turn that already moved on", () => {
@@ -252,12 +275,17 @@ describe("mergeGame: status, options, timestamps, nextGameId", () => {
     expect(result.options.botsWait).toBe(3000);
   });
 
-  it("takes changed options and nextGameId, and clears endedAt on a rollback", () => {
-    const over = { ...startedGame(["a", "b"]), status: IGameStatus.OVER, endedAt: 99 };
-    const proposed = { ...over, status: IGameStatus.ONGOING, endedAt: undefined, nextGameId: "Again" };
+  it("keeps start time and clears finish metadata on an actual rollback", () => {
+    let completed = startedGame(["a", "b"]);
+    while (completed.status !== IGameStatus.OVER) completed = move(completed, "other");
+    const over = { ...completed, endedAt: 2000 };
+    const proposed = { ...rollbackTo(over, over.turnsHistory.length - 1), nextGameId: "Again" };
     const result = merged(over, over, proposed);
     expect(result.status).toBe(IGameStatus.ONGOING);
+    expect(result.startedAt).toBe(1000);
     expect(result.endedAt).toBeUndefined();
+    expect(result.outcome).toBeUndefined();
+    expect(result.undoCount).toBe(1);
     expect(result.nextGameId).toBe("Again");
   });
 
@@ -267,11 +295,71 @@ describe("mergeGame: status, options, timestamps, nextGameId", () => {
   });
 });
 
+describe("mergeGame: forfeit", () => {
+  it("allows a sole seated human to forfeit with bots and keeps the partial score", () => {
+    const game = startedGame(["a", "b-bot"]);
+    const cardIndex = game.players[game.currentPlayer].hand.findIndex((card) => card.number === 1);
+    expect(cardIndex).toBeGreaterThanOrEqual(0);
+    const scored = commitAction(game, { action: "play", from: game.currentPlayer, cardIndex });
+    const proposal = forfeitProposal(scored, "a", "request");
+    const result = mergeGame(scored, scored, proposal, { actor: "a", now: () => 3000 });
+    expect(result.ok && result.game).toMatchObject({
+      status: IGameStatus.OVER,
+      outcome: "forfeited",
+      endedAt: 3000,
+      forfeit: { approvedBy: ["a"], closed: true },
+    });
+    if (!result.ok) throw new Error("Forfeit rejected");
+    const finished = materialize(result.game);
+    expect(finished.playedCards).toEqual(scored.playedCards);
+    expect(mergeGame(scored, finished, move(scored))).toEqual({ ok: false, reason: "turn-conflict" });
+    expect(mergeGame(finished, finished, rollbackTo(finished, 0))).toEqual({ ok: false, reason: "turn-conflict" });
+  });
+
+  it("finishes naturally during a pending vote and ignores the late deciding approval", () => {
+    const game = startedGame(["a", "b"]);
+    const request = mergeGame(game, game, forfeitProposal(game, "a", "request"), { actor: "a" });
+    if (!request.ok) throw new Error("Request rejected");
+    const pending = materialize(request.game);
+    const approval = forfeitProposal(pending, "b", "approve");
+    let current = pending;
+    while (current.status !== IGameStatus.OVER) {
+      const next = mergeGame(current, current, move(current, "other"), { now: () => 3000 });
+      if (!next.ok) throw new Error("Move rejected");
+      current = materialize(next.game);
+    }
+    expect(current).toMatchObject({ outcome: "completed", endedAt: 3000, forfeit: { closed: true } });
+    expect(mergeGame(pending, current, approval, { actor: "b" })).toMatchObject({ changed: false });
+    const legacy = {
+      ...doc(current),
+      matchId: undefined,
+      startedAt: undefined,
+      endedAt: undefined,
+      outcome: undefined,
+      undoCount: undefined,
+    };
+    const rebuilt = materialize(toDocument(legacy));
+    expect(rebuilt).toMatchObject({ status: IGameStatus.OVER });
+    expect(rebuilt.endedAt).toBeUndefined();
+    expect(rebuilt.outcome).toBeUndefined();
+  });
+
+  it("ignores a status-only shortcut and disallows local votes", () => {
+    const local = startedGame(["a", "b"], { gameMode: GameMode.PASS_AND_PLAY });
+    expect(forfeitProposal(local, "a", "request")).toBeNull();
+    const game = startedGame(["a", "b"]);
+    expect(merged(game, game, { ...game, status: IGameStatus.OVER, outcome: "forfeited", endedAt: 3000 })).toEqual(
+      doc(game)
+    );
+  });
+});
+
 describe("mergeGame: purity", () => {
   it("does not modify its inputs and returns a rebuildable document", () => {
-    const base = deepFreeze(doc(join(lobbyGame(), "host")));
-    const current = deepFreeze(doc(chat(join(lobbyGame(), "host"), "c1")));
-    const proposed = deepFreeze(doc(join(join(lobbyGame(), "host"), "bob")));
+    const lobby = join(lobbyGame(), "host");
+    const base = deepFreeze(doc(lobby));
+    const current = deepFreeze(doc(chat(lobby, "c1")));
+    const proposed = deepFreeze(doc(join(lobby, "bob")));
     const snapshot = cloneDeep([base, current, proposed]);
 
     const result = mergeGame(base, current, proposed);

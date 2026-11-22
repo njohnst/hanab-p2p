@@ -18,10 +18,11 @@ interface Props {
   onCloseArea: () => void;
   /** Nearby mode: open the invitation dialog, owned by the game so that it outlives this menu. */
   onInviteNearby?: () => void;
+  onRequestForfeit?: () => void;
 }
 
 export default function MenuArea(props: Props) {
-  const { onCloseArea, onInviteNearby } = props;
+  const { onCloseArea, onInviteNearby, onRequestForfeit } = props;
 
   const [showRules, setShowRules] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -76,6 +77,14 @@ export default function MenuArea(props: Props) {
                 size={ButtonSize.MEDIUM}
                 text={t("invitePlayers")}
                 onClick={() => setShowInvite(true)}
+              />
+            )}
+            {onRequestForfeit && (
+              <Button
+                className="mb3 w-100"
+                size={ButtonSize.MEDIUM}
+                text={t("forfeit", "Forfeit game")}
+                onClick={onRequestForfeit}
               />
             )}
             <Button className="mb3 w-100" size={ButtonSize.MEDIUM} text={t("userPreferences")} onClick={onPrefClick} />

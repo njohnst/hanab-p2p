@@ -12,10 +12,13 @@
  * same game produce deep-equal documents.
  */
 import { cloneDeep, omit, pick } from "lodash";
+import { isGameOver } from "~/lib/actions";
 import IGameState, {
   cleanState,
   fillEmptyValues,
+  ForfeitRequest,
   GameMode,
+  GameOutcome,
   IGameOptions,
   IGameStatus,
   IMessage,
@@ -37,6 +40,10 @@ export interface GameDocument {
   createdAt: number;
   startedAt?: number;
   endedAt?: number;
+  matchId?: string;
+  undoCount?: number;
+  outcome?: GameOutcome;
+  forfeit?: ForfeitRequest;
   nextGameId?: string;
 }
 
@@ -44,7 +51,7 @@ export interface GameDocument {
 const ACTION_FIELDS = ["action", "from", "to", "type", "value", "cardIndex"];
 /** Player fields that are rebuilt from the join order and the deck. */
 const DERIVED_PLAYER_FIELDS = ["hand", "index", "lastAction"];
-const OPTIONAL_SCALARS = ["startedAt", "endedAt", "nextGameId"] as const;
+const OPTIONAL_FIELDS = ["startedAt", "endedAt", "nextGameId", "matchId", "undoCount", "outcome", "forfeit"] as const;
 
 function jsonClone<T>(value: T, fallback: T): T {
   if (value === undefined) {
@@ -92,8 +99,8 @@ export function toDocument(game: Partial<IGameState> | GameDocument): GameDocume
     createdAt: source.createdAt,
   };
 
-  OPTIONAL_SCALARS.forEach((field) => {
-    ((doc as unknown) as Record<string, unknown>)[field] = source[field];
+  OPTIONAL_FIELDS.forEach((field) => {
+    ((doc as unknown) as Record<string, unknown>)[field] = cloneDeep(source[field]);
   });
 
   // Same shape whether the document went through JSON or not.
@@ -113,21 +120,11 @@ export function isLocalGame(doc: Pick<GameDocument, "options"> | null | undefine
 
 /**
  * Rebuild the full game state from a document: hands, piles and tokens come
- * from replaying the joins and turns on the seeded deck. rebuildGame does not
- * carry startedAt/endedAt (and stamps a fresh endedAt when the replay ends the
- * game), so both are restored from the document.
+ * from replaying the joins and turns on the seeded deck.
  */
 export function materialize(doc: GameDocument): IGameState {
   const game = rebuildGame(fillEmptyValues((cloneDeep(doc) as unknown) as IGameState));
 
-  delete game.startedAt;
-  delete game.endedAt;
-  if (doc.startedAt !== undefined) {
-    game.startedAt = doc.startedAt;
-  }
-  if (doc.endedAt !== undefined) {
-    game.endedAt = doc.endedAt;
-  }
   game.synced = true;
 
   return game;
@@ -145,6 +142,26 @@ export function tryMaterialize(doc: GameDocument): IGameState | null {
     }
     const game = materialize(doc);
     if (game.players.length !== doc.players.length || game.turnsHistory.length !== doc.turnsHistory.length) {
+      return null;
+    }
+    const humans = game.players.filter((player) => !player.bot).map((player) => player.id);
+    const request = game.forfeit;
+    if (
+      request &&
+      (isLocalGame(doc) ||
+        (!request.closed &&
+          (game.status !== IGameStatus.ONGOING || humans.every((id) => request.approvedBy.includes(id)))) ||
+        !humans.includes(request.requesterId) ||
+        !request.approvedBy.includes(request.requesterId) ||
+        request.approvedBy.some((id) => !humans.includes(id)))
+    ) {
+      return null;
+    }
+    if (game.outcome === "completed" && !isGameOver(game)) return null;
+    if (
+      game.outcome === "forfeited" &&
+      (!request?.closed || !humans.every((id) => request.approvedBy.includes(id)) || isGameOver(game))
+    ) {
       return null;
     }
     return game;

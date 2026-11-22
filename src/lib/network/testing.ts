@@ -3,7 +3,7 @@
  * localStorage) on an in-memory network, and real game states built with the
  * game's own actions so that rebuilds are exercised. Not used by the app.
  */
-import { commitAction, joinGame, MaxHints, newGame } from "~/lib/actions";
+import { commitAction, getStateAtTurn, joinGame, MaxHints, newGame } from "~/lib/actions";
 import { play } from "~/lib/ai";
 import IGameState, { GameMode, GameVariant, IAction, IGameHintsLevel, IGameOptions, IGameStatus } from "~/lib/state";
 import { NetworkNode, NetworkTimings } from "./node";
@@ -80,20 +80,8 @@ export function move(game: IGameState, kind: "hint" | "other" = "hint"): IGameSt
   return commitAction(game, someMove(game, kind));
 }
 
-/**
- * The game rolled back to `turn`, like the rollback area does with
- * getStateAtTurn (which is memoised per game id and turn, so unusable with
- * the many same-id games of the tests).
- */
 export function rollbackTo(game: IGameState, turn: number): IGameState {
-  let state = newGame(game.options);
-  game.players.forEach((player) => {
-    state = joinGame(state, player);
-  });
-  game.turnsHistory.slice(0, turn).forEach((t) => {
-    state = commitAction(state, { ...t.action });
-  });
-  return { ...state, messages: game.messages, status: IGameStatus.ONGOING, createdAt: game.createdAt };
+  return getStateAtTurn(game, turn);
 }
 
 export interface TestPeer {

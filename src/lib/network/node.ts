@@ -4,10 +4,13 @@
  * node through the public API; tests create several nodes on an in-memory
  * network to simulate several browsers.
  */
-import IGameState, { IPlayer } from "~/lib/state";
+import { entryFromGame, entryKey, groupKey, HistoryEntry, seatedGroup } from "~/lib/history/result";
+import { HistoryRooms } from "~/lib/history/rooms";
+import { HistoryStore } from "~/lib/history/store";
+import IGameState, { IGameStatus, IPlayer } from "~/lib/state";
 import { GameDocument, isLocalGame, materialize, SourceVersion, sourceOf, stampSource, toDocument } from "./document";
 import { LobbyTimings, PublicLobby } from "./publicLobby";
-import { KeyValueStorage, ReplicaStore } from "./storage";
+import { compareVersions, KeyValueStorage, ReplicaStore } from "./storage";
 import { GameSync, SyncSnapshot, SyncTimings } from "./sync";
 import { Transport } from "./transports/types";
 import { ConnectionInfo, PublicGame, RecentGame, Rejection } from "./types";
@@ -72,10 +75,17 @@ export function randomId(length = 12): string {
 export class NetworkNode {
   readonly authorKey: string;
   readonly store: ReplicaStore;
+  readonly history: HistoryStore;
   readonly lobby: PublicLobby;
   readonly timings: NetworkTimings;
 
   private readonly syncs = new Map<string, GameSync>();
+  private readonly historyRooms: HistoryRooms;
+  private readonly historyWatchers = new Map<
+    string,
+    { refresh: () => void; stopWaiting: () => void; current: () => HistoryEntry | null }
+  >();
+  private departed = false;
   private readonly rejectionListeners = new Map<string, Set<(rejection: Rejection) => void>>();
   /** Games created in this tab and not opened yet: this tab is their first authority. */
   private readonly fresh = new Set<string>();
@@ -89,6 +99,18 @@ export class NetworkNode {
       lobby: { ...DEFAULT_TIMINGS.lobby, ...options.timings?.lobby },
     };
     this.store = new ReplicaStore(() => this.resolveStorage(), options.maxReplicas);
+    this.history = new HistoryStore(() => this.resolveStorage());
+    this.historyRooms = new HistoryRooms(
+      this.history,
+      () => this.getTransport(),
+      (entry) => {
+        const current = this.historyWatchers.get(entry.gameId)?.current();
+        if (current?.matchId !== entry.matchId || groupKey(current.group) !== groupKey(entry.group)) return entry;
+        // The live game is authoritative for its own result, including a
+        // rollback that happened before this browser received the old finish.
+        return compareVersions(current, entry) >= 0 ? current : null;
+      }
+    );
     this.lobby = new PublicLobby({
       getTransport: () => this.getTransport(),
       now: () => Date.now(),
@@ -138,7 +160,11 @@ export class NetworkNode {
           notifyRejection: (rejection) => this.notifyRejection(rejection),
           protectedGameIds: () => Array.from(this.syncs.keys()),
           onClosed: (closed) => {
-            if (this.syncs.get(closed.gameId) === closed) this.syncs.delete(closed.gameId);
+            if (this.syncs.get(closed.gameId) !== closed) return;
+            this.syncs.delete(closed.gameId);
+            this.historyWatchers.get(closed.gameId)?.stopWaiting();
+            this.historyWatchers.delete(closed.gameId);
+            this.historyRooms.remove(closed.gameId);
           },
         },
         { fresh: this.fresh.has(gameId) }
@@ -146,9 +172,68 @@ export class NetworkNode {
       this.fresh.delete(gameId);
       this.syncs.set(gameId, sync);
       sync.start();
+      this.watchHistory(sync);
     }
     sync.acquire();
     return sync;
+  }
+
+  private watchHistory(sync: GameSync) {
+    const { gameId } = sync;
+    let game: IGameState | null = null;
+    let recorded: IGameState | null = null;
+    let current: HistoryEntry | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stopWaiting = () => {
+      clearTimeout(timer);
+      timer = undefined;
+    };
+
+    const refresh = () => {
+      stopWaiting();
+      if (this.departed || sync.closed || !game) return;
+      const playerId = this.options.getPlayerId?.();
+      const group = game.status === IGameStatus.LOBBY ? null : seatedGroup(game);
+      if (!playerId || !group?.includes(playerId)) {
+        this.historyRooms.remove(gameId);
+        return;
+      }
+      const { synced, pendingWrites, version, author } = sync.snapshot();
+      const source = sourceOf(game);
+      if (!synced || pendingWrites || source?.version !== version || source?.author !== author) {
+        this.historyRooms.remove(gameId);
+        // GameSync may settle its startup window without emitting a new replica.
+        timer = setTimeout(refresh, this.timings.tickMs);
+        return;
+      }
+
+      let changed: HistoryEntry[] = [];
+      if (game !== recorded) {
+        recorded = game;
+        current = entryFromGame(game, group, { version, author });
+        if (current) {
+          const previous = this.history.get(entryKey(current));
+          if (current.result || previous?.result) changed = this.history.merge([current]);
+        }
+      }
+      const peers = sync
+        .connectionInfo()
+        .peers.filter((peer) => group.includes(peer.playerId))
+        .map((peer) => peer.peerId);
+      this.historyRooms.follow(gameId, isLocalGame(game) ? null : group, peers);
+      this.historyRooms.publish(changed);
+    };
+
+    this.historyWatchers.set(gameId, {
+      refresh,
+      stopWaiting,
+      current: () => (game === recorded && sync.snapshot().synced ? current : null),
+    });
+    sync.addGameListener((accepted) => {
+      game = accepted;
+      refresh();
+    });
+    sync.addConnectionListener(refresh);
   }
 
   /** Hold the game's room while `run` executes (and the grace period after). */
@@ -320,7 +405,9 @@ export class NetworkNode {
    * left by depart(), and those where nobody is connected.
    */
   revive() {
+    this.departed = false;
     this.syncs.forEach((sync) => sync.revive());
+    this.historyWatchers.forEach(({ refresh }) => refresh());
     this.lobby.revive();
   }
 
@@ -331,6 +418,9 @@ export class NetworkNode {
    * stay; revive() joins again if the page comes back. Idempotent.
    */
   depart() {
+    this.departed = true;
+    this.historyWatchers.forEach(({ stopWaiting }) => stopWaiting());
+    this.historyRooms.clear();
     Array.from(this.syncs.values()).forEach((sync) => {
       try {
         sync.depart();
@@ -359,6 +449,7 @@ export class NetworkNode {
 
   /** Leave every room right away (tests, or a tab going away for good). */
   dispose() {
+    this.historyRooms.clear();
     Array.from(this.syncs.values()).forEach((sync) => sync.close());
     this.syncs.clear();
     this.lobby.dispose();

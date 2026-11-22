@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { joinGame, sendMessage } from "~/lib/actions";
+import { forfeitProposal, joinGame, sendMessage } from "~/lib/actions";
 import { play } from "~/lib/ai";
 import IGameState, { GameMode, IGameStatus } from "~/lib/state";
 import { documentOf, materialize } from "./document";
@@ -490,7 +490,92 @@ describe("authority changes", () => {
     network = new MemoryNetwork({ latencyMs: 10 });
     peers = [];
     const second = (await splitBrain()).final.game;
-    expect(second).toEqual(first);
+    expect(second).toEqual({ ...first, matchId: second.matchId });
+  });
+});
+
+describe("forfeit voting", () => {
+  it("keeps a request across authority transfer and waits for a disconnected human", async () => {
+    const a = await host("a", startedGame(["a", "b", "c", "d-bot"]));
+    const [b, spectator] = await joinAll("b", "spectator");
+    const [bot] = await joinAll("d-bot");
+    await a.node.updateGame(forfeitProposal(a.game(G), "a", "request"));
+    await settle(100);
+    const requestId = b.game(G).forfeit.id;
+    expect(b.game(G).forfeit.approvedBy).toEqual(["a"]);
+
+    await spectator.node.updateGame(forfeitProposal(spectator.game(G), "b", "approve"));
+    await bot.node.updateGame(forfeitProposal(bot.game(G), "b", "approve"));
+    await settle(100);
+    expect(spectator.rejections.map((r) => r.reason)).toEqual(["invalid"]);
+    expect(bot.rejections.map((r) => r.reason)).toEqual(["invalid"]);
+    expect(b.game(G).forfeit.approvedBy).toEqual(["a"]);
+
+    a.node.dispose();
+    await settle(2000);
+    expect(authorities([b, spectator, bot])).toEqual(["b"]);
+    await b.node.updateGame(forfeitProposal(b.game(G), "b", "approve"));
+    await settle(100);
+    expect(spectator.game(G)).toMatchObject({
+      status: IGameStatus.ONGOING,
+      forfeit: { id: requestId, approvedBy: ["a", "b"] },
+    });
+
+    const [c] = await joinAll("c");
+    await c.node.updateGame(forfeitProposal(c.game(G), "c", "approve"));
+    await settle(100);
+    expect(b.game(G)).toMatchObject({
+      status: IGameStatus.OVER,
+      outcome: "forfeited",
+      forfeit: { id: requestId, approvedBy: ["a", "b", "c"], closed: true },
+    });
+    expectConverged([b, c, spectator, bot]);
+  });
+
+  it("ignores stale approvals after rejection or requester cancellation", async () => {
+    const a = await host("a", startedGame(["a", "b", "c"]));
+    const [b, c] = await joinAll("b", "c");
+    await a.node.updateGame(forfeitProposal(a.game(G), "a", "request"));
+    await settle(100);
+    const oldApproval = forfeitProposal(b.game(G), "b", "approve");
+    await c.node.updateGame(forfeitProposal(c.game(G), "c", "reject"));
+    await settle(100);
+    expect(a.game(G).forfeit.closed).toBe(true);
+
+    await a.node.updateGame(forfeitProposal(a.game(G), "a", "request"));
+    await settle(100);
+    expect(a.game(G).forfeit.id).not.toBe(oldApproval.forfeit.id);
+    const lateApproval = forfeitProposal(b.game(G), "b", "approve");
+    const concurrentApproval = forfeitProposal(c.game(G), "c", "approve");
+    await b.node.updateGame(oldApproval);
+    await settle(100);
+    expect(a.game(G).forfeit.approvedBy).toEqual(["a"]);
+
+    await c.node.updateGame(concurrentApproval);
+    await settle(100);
+    await a.node.updateGame(forfeitProposal(a.game(G), "a", "cancel"));
+    await b.node.updateGame(lateApproval);
+    await settle(100);
+    expect(a.game(G)).toMatchObject({
+      status: IGameStatus.ONGOING,
+      forfeit: { id: lateApproval.forfeit.id, approvedBy: ["a", "c"], closed: true },
+    });
+    expectConverged([a, b, c]);
+  });
+
+  it("merges approvals sent from the same pending version", async () => {
+    const a = await host("a", startedGame(["a", "b", "c"]));
+    const [b, c] = await joinAll("b", "c");
+    await a.node.updateGame(forfeitProposal(a.game(G), "a", "request"));
+    await settle(100);
+    await Promise.all([
+      b.node.updateGame(forfeitProposal(b.game(G), "b", "approve")),
+      c.node.updateGame(forfeitProposal(c.game(G), "c", "approve")),
+    ]);
+    await settle(100);
+    expect(a.game(G).outcome).toBe("forfeited");
+    expect([...a.game(G).forfeit.approvedBy].sort()).toEqual(["a", "b", "c"]);
+    expectConverged([a, b, c]);
   });
 });
 

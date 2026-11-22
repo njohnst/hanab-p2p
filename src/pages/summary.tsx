@@ -1,5 +1,5 @@
 import classnames from "classnames";
-import moment from "moment";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { ReactNode, useEffect, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
@@ -16,9 +16,10 @@ import { GameContext } from "~/hooks/game";
 import { newGame } from "~/lib/actions";
 import { logEvent } from "~/lib/analytics";
 import { logFailedPromise } from "~/lib/errors";
+import { durationBetween, formatElapsed } from "~/lib/history/result";
 import { ConnectionInfo, loadGame, subscribeToConnection, subscribeToGame, updateGame } from "~/lib/network";
 import { gameUrl, queryParam } from "~/lib/routes";
-import IGameState, { GameVariant } from "~/lib/state";
+import IGameState, { GameVariant, IGameStatus } from "~/lib/state";
 
 interface SectionProps {
   children: ReactNode;
@@ -42,10 +43,6 @@ function Section(props: SectionProps) {
       </div>
     </div>
   );
-}
-
-function formatDuration(start: number, end: number) {
-  return moment.utc(moment(end).diff(start)).format("HH:mm:ss");
 }
 
 function CopiedToast({ visible, label }: { visible: boolean; label: string }) {
@@ -181,7 +178,8 @@ function GameSummary(props: { gameId: string }) {
     return <WaitingForGame connection={connection} gameId={gameId} notSharedYet={notSharedYet} />;
   }
 
-  const gameDuration = game.startedAt && game.endedAt ? formatDuration(game.startedAt, game.endedAt) : null;
+  const elapsed = durationBetween(game.startedAt, game.endedAt);
+  const gameDuration = elapsed === null ? null : formatElapsed(elapsed);
   const shortSeed = game.options.seed ? game.options.seed.slice(0, 4) + "∗∗∗∗" + game.options.seed.slice(-4) : "";
 
   return (
@@ -202,7 +200,23 @@ function GameSummary(props: { gameId: string }) {
             Players: {game.players.length} · Mode: {gameVariantToText(game.options.variant)}
           </Txt>
           <ShuffleSeed seed={shortSeed} onCopy={onCopySeed} />
-          {gameDuration && <Txt className="mt2" size={TxtSize.MEDIUM} value={t("gameCompleted", { gameDuration })} />}
+          {game.status === IGameStatus.OVER && (
+            <>
+              {game.outcome === "forfeited" ? (
+                <Txt className="mt2" size={TxtSize.MEDIUM}>
+                  {t("history.forfeited", "Forfeited")}
+                  {gameDuration && ` · ${t("history.elapsed", "Elapsed {{gameDuration}}", { gameDuration })}`}
+                </Txt>
+              ) : (
+                gameDuration && (
+                  <Txt className="mt2" size={TxtSize.MEDIUM} value={t("gameCompleted", { gameDuration })} />
+                )
+              )}
+            </>
+          )}
+          <Link className="mt3 lavender" href="/history/">
+            {t("history.title", "Match history")}
+          </Link>
         </div>
 
         <Section title={t("result")}>

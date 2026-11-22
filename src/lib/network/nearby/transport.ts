@@ -10,8 +10,9 @@
  *
  * Like the Trystero transport, handlers only run once join() resolved: the
  * room's current members are then reported as joining. Every room joined
- * here except the public lobby is remembered as a nearby game (./games.ts).
+ * here except the public lobby and history rooms is remembered as a nearby game (./games.ts).
  */
+import { HISTORY_ROOM_PREFIX } from "~/lib/history/rooms";
 import { PUBLIC_LOBBY_ROOM } from "../publicLobby";
 import { KeyValueStorage } from "../storage";
 import { JoinOptions, Transport, TransportHandlers, TransportRoom, transportUnavailable } from "../transports/types";
@@ -97,7 +98,7 @@ export function createNearbyTransport(links: LinkManager, options: NearbyTranspo
       if (first) announce();
       refresh(membership);
 
-      if (roomId !== PUBLIC_LOBBY_ROOM) {
+      if (roomId !== PUBLIC_LOBBY_ROOM && !roomId.startsWith(HISTORY_ROOM_PREFIX)) {
         try {
           rememberNearbyGame(options.storage?.() ?? null, roomId);
         } catch (e) {
