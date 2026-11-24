@@ -363,7 +363,9 @@ describe("authority changes", () => {
     runners.b.stop();
     runners.c.stop();
     expectConverged([b, c], id);
-  });
+    // This simulates an entire bot game on three replicas. Allow slower CI CPUs
+    // more wall time; the simulated clock and all handover assertions stay fixed.
+  }, 20000);
 
   it("re-sends proposals lost with a departing authority to the new one", async () => {
     const a = await host("a", lobbyGame());
