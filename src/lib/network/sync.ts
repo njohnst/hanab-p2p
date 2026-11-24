@@ -185,6 +185,7 @@ export class GameSync {
   private joinGen = 0;
   private joinedAt = 0;
   private joinError: string | null = null;
+  private connectionFailure: ConnectionInfo["connectionFailure"] = null;
   private syncWindowOver = false;
   private synced: boolean;
   private authority = false;
@@ -325,6 +326,7 @@ export class GameSync {
       isAuthority: this.local || this.authority,
       hasState: this.replica !== null,
       error: this.protocolError ?? (!this.room ? this.joinError : null),
+      connectionFailure: this.connectionFailure,
     };
   }
 
@@ -455,12 +457,18 @@ export class GameSync {
     }
 
     this.joinError = null;
+    this.connectionFailure = null;
     const live = () => gen === this.joinGen && !this.closed;
     const handlers = {
       onMessage: (data: unknown, peerId: string) => live() && this.onMessage(data, peerId),
       onPeerJoin: (peerId: string) => live() && this.guard(() => this.onPeerJoin(peerId)),
       onPeerLeave: (peerId: string) => live() && this.guard(() => this.onPeerLeave(peerId)),
       onError: (error: string) => live() && console.warn(`[network] ${this.gameId}: ${error}`),
+      onConnectionFailure: (failure: ConnectionInfo["connectionFailure"]) => {
+        if (!live()) return;
+        this.connectionFailure = failure;
+        this.emitConnection();
+      },
     };
 
     let joined: Promise<TransportRoom>;

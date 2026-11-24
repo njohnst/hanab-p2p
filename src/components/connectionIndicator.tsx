@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowContainer, Popover } from "react-tiny-popover";
 import { NearbyInviteModal } from "~/components/nearbyInvite";
+import OnlineConnectionFailure from "~/components/onlineConnectionFailure";
 import { POPOVER_ARROW_COLOR, POPOVER_CONTENT_STYLE } from "~/components/popoverAppearance";
 import Button, { ButtonSize } from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
@@ -217,6 +218,7 @@ function ConnectionDetails(props: DetailsProps) {
           <Txt size={TxtSize.XSMALL} value={t("unified.connectByQr")} />
         </Button>
       )}
+      <OnlineConnectionFailure connection={connection} />
     </div>
   );
 }

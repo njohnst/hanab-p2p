@@ -10,7 +10,10 @@
  * sent (WebRTC data channels are ordered), but may be lost when a peer drops.
  */
 
+import type { ConnectionInfo } from "../types";
+
 export interface TransportHandlers {
+  onConnectionFailure?(failure: ConnectionInfo["connectionFailure"]): void;
   onMessage(data: unknown, peerId: string): void;
   onPeerJoin(peerId: string): void;
   onPeerLeave(peerId: string): void;

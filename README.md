@@ -1,5 +1,12 @@
 # Hanab, peer-to-peer
 
+If online discovery finds another player but the connection fails after exchanging connection
+details, the waiting screen explains that failure. Expand **Connection details** to copy a report;
+the same diagnostic is available in the in-game connection popover. Existing QR connections can
+continue working even when an online connection fails. QR bypasses signaling, not network isolation.
+On Android, check Chrome's **Nearby devices** permission if it is listed. Some networks require the
+optional TURN configuration described below; this app does not provision a TURN service automatically.
+
 Play Hanab with friends straight from the browser: no accounts, no game server. Create a room, share
 the link or let your friends scan its QR code, and the players' browsers connect to each other over
 WebRTC. No internet? Devices on the same Wi-Fi can still play together by scanning each other's

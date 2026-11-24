@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import HomeButton from "~/components/homeButton";
+import OnlineConnectionFailure from "~/components/onlineConnectionFailure";
 import NearbyJoin from "~/components/nearbyJoin";
 import Button, { ButtonSize } from "~/components/ui/button";
 import Txt, { TxtSize } from "~/components/ui/txt";
@@ -33,6 +34,9 @@ export default function WaitingForGame(props: Props) {
   if (hasPeers) {
     title = t("unified.waitingForData");
     detail = null;
+  } else if (connection?.connectionFailure) {
+    title = t("onlineFailure.title");
+    detail = t("onlineFailure.description");
   } else if (notSharedYet && mode !== "local") {
     title = t("unified.noPlayersConnected");
     detail = t("unified.keepInviterOpen");
@@ -71,6 +75,7 @@ export default function WaitingForGame(props: Props) {
         </div>
       )}
       <Txt className="gray mt3" size={TxtSize.XSMALL} value={gameId} />
+      <OnlineConnectionFailure connection={connection} />
       {connection?.error && <Txt className="red mt3" value={connection.error} />}
     </div>
   );

@@ -1,4 +1,13 @@
 export const en = {
+  onlineFailure: {
+    title: "Found another player, but couldn’t connect",
+    description: "Connection details were exchanged, but a working connection could not be established.",
+    help:
+      "Keep both screens open. Check the network, then reload to retry. QR can bypass online discovery, but still needs a working network path. Some networks require a TURN relay configured by the site operator. Existing connections can continue working.",
+    android:
+      "On Android, if Chrome lists Nearby devices under Settings → Apps → Chrome → Permissions, allow it on both phones and reload. Guest Wi-Fi may also block connections between devices.",
+    details: "Connection details",
+  },
   codedHintMarkers: "Coded hint markers on cards",
   hanab: "Hanab",
   turn: "Turn",

@@ -27,6 +27,8 @@ export interface PeerInfo {
 }
 
 export interface ConnectionInfo {
+  /** Nonfatal online-path diagnostic; other peers or QR links may still work. */
+  connectionFailure?: { stage: "peer-connection"; message: string; transport: "webrtc" } | null;
   gameId: string;
   status: ConnectionStatus;
   /** Peers currently connected to this tab for this game. */

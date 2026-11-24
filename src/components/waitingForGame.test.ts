@@ -11,26 +11,38 @@ import WaitingForGame from "./waitingForGame";
 vi.mock("~/hooks/networkMode", () => ({ useNetworkMode: vi.fn() }));
 vi.mock("~/components/homeButton", () => ({ default: () => null }));
 
-function render(mode: NetworkMode | null, { timedOut = false, connected = false } = {}) {
+function render(mode: NetworkMode | null, { timedOut = false, connected = false, failed = false } = {}) {
   vi.mocked(useNetworkMode).mockReturnValue(mode);
   const app = createElement(WaitingForGame, {
     gameId: "TestGame",
     notSharedYet: timedOut,
-    connection: connected
-      ? {
-          gameId: "TestGame",
-          status: "connected",
-          peers: [{ peerId: "host", playerId: "host" }],
-          isAuthority: false,
-          hasState: false,
-          error: null,
-        }
-      : null,
+    connection:
+      connected || failed
+        ? {
+            gameId: "TestGame",
+            status: "connected",
+            peers: connected ? [{ peerId: "host", playerId: "host" }] : [],
+            connectionFailure: failed
+              ? { stage: "peer-connection", transport: "webrtc", message: "could not connect after exchanging SDP" }
+              : null,
+            isAuthority: false,
+            hasState: false,
+            error: null,
+          }
+        : null,
   });
   return renderToStaticMarkup(app as Parameters<typeof renderToStaticMarkup>[0]);
 }
 
 describe("WaitingForGame", () => {
+  it("explains failed peer connection instead of claiming nobody was found", () => {
+    const html = render("webrtc", { timedOut: true, failed: true });
+    expect(html).toContain("Found another player");
+    expect(html).not.toContain("No players connected yet");
+    expect(html).toContain("Nearby devices");
+    expect(html).toContain("after exchanging SDP");
+    expect(render("webrtc", { connected: true, failed: true })).toContain("Waiting for game data");
+  });
   it("shows automatic connection before the network mode is known", () => {
     const html = render(null);
     expect(html).toContain("Connecting online…");

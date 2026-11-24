@@ -147,6 +147,9 @@ export function createCombinedTransport(selfId: string, transports: Transport[])
               });
             }),
           // An internet signaling error must not disable a working QR connection.
+          onConnectionFailure: (failure) => {
+            if (!left) dispatch(() => handlers.onConnectionFailure?.(failure));
+          },
           onError: () => undefined,
         };
         Promise.resolve()

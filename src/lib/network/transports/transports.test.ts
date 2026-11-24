@@ -15,13 +15,18 @@ interface FakeRoom {
   onPeerLeave: ((peerId: string) => void) | null;
   leaveCalls: number;
   finishLeave: () => void;
+  fail: (error: string) => void;
 }
 
 const rooms: FakeRoom[] = [];
 
 vi.mock("trystero", () => ({
   selfId: "self-peer",
-  joinRoom: (config: Record<string, unknown>, roomId: string) => {
+  joinRoom: (
+    config: Record<string, unknown>,
+    roomId: string,
+    callbacks: { onJoinError: (details: { error: string }) => void }
+  ) => {
     let finishLeave: () => void = () => undefined;
     const room: FakeRoom = {
       config,
@@ -32,6 +37,7 @@ vi.mock("trystero", () => ({
       onPeerLeave: null,
       leaveCalls: 0,
       finishLeave: () => finishLeave(),
+      fail: (error) => callbacks.onJoinError({ error }),
     };
     rooms.push(room);
     return {
@@ -68,6 +74,23 @@ afterEach(() => {
 });
 
 describe("Trystero transport", () => {
+  it("distinguishes SDP connection failure from other errors and clears it on recovery", async () => {
+    vi.stubGlobal("RTCPeerConnection", class {});
+    const diagnostic = vi.fn();
+    const transport = createTrysteroTransport();
+    await transport.join(
+      "G",
+      { password: "G" },
+      { onMessage: vi.fn(), onPeerJoin: vi.fn(), onPeerLeave: vi.fn(), onConnectionFailure: diagnostic }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    rooms[0].fail("signaling unavailable");
+    expect(diagnostic).not.toHaveBeenCalled();
+    rooms[0].fail("could not connect to peer p after exchanging SDP; configure TURN");
+    expect(diagnostic).toHaveBeenLastCalledWith(expect.objectContaining({ stage: "peer-connection" }));
+    rooms[0].onPeerJoin("p");
+    expect(diagnostic).toHaveBeenLastCalledWith(null);
+  });
   it("joins with the room password and extra ICE servers, and queues events until the room is returned", async () => {
     vi.stubGlobal("RTCPeerConnection", class {});
     const events: string[] = [];
@@ -88,6 +111,15 @@ describe("Trystero transport", () => {
       appId: "hanab-p2p",
       password: "SomeGame",
       turnConfig: [{ urls: ["turn:turn.example:3478"], username: "u" }],
+      relayConfig: {
+        urls: [
+          "wss://relay.artio.inf.unibe.ch",
+          "wss://nostr-01.yakihonne.com",
+          "wss://nostr.sathoarder.com",
+          "wss://nostr-01.uid.ovh",
+        ],
+        warnOnRelayFailure: false,
+      },
     });
     fake.onPeerJoin("peer-1");
     fake.action.onMessage({ hello: 1 }, { peerId: "peer-1" });

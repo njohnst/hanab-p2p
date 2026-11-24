@@ -1,4 +1,14 @@
 export const fr = {
+  onlineFailure: {
+    title: "Un autre joueur a été trouvé, mais la connexion a échoué",
+    description:
+      "Les informations de connexion ont été échangées, mais aucune connexion fonctionnelle n’a pu être établie.",
+    help:
+      "Gardez les deux écrans ouverts. Vérifiez le réseau, puis rechargez pour réessayer. Le QR contourne la découverte en ligne, mais nécessite un chemin réseau fonctionnel. Certains réseaux nécessitent un relais TURN configuré par le site. Les connexions existantes peuvent continuer à fonctionner.",
+    android:
+      "Sur Android, si Chrome affiche Appareils à proximité dans Paramètres → Applications → Chrome → Autorisations, autorisez-les sur les deux téléphones et rechargez. Le Wi-Fi invité peut aussi bloquer les connexions entre appareils.",
+    details: "Détails de connexion",
+  },
   hanab: "Hanab",
   welcome: "Bienvenue",
   newGame: "Nouvelle partie",

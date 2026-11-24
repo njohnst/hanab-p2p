@@ -3,7 +3,7 @@ import { joinGame, sendMessage } from "~/lib/actions";
 import { createPeer, lobbyGame, TestPeer } from "../testing";
 import { createCombinedTransport } from "./combined";
 import { MemoryNetwork } from "./memory";
-import { Transport, TransportRoom } from "./types";
+import { Transport, TransportHandlers, TransportRoom } from "./types";
 
 let internet: MemoryNetwork;
 let nearby: MemoryNetwork;
@@ -46,6 +46,29 @@ async function join(t: Transport, name = "Game") {
 }
 
 describe("one room over internet and QR connections", () => {
+  it("exposes late connection diagnostics through sync without taking healthy QR peers offline", async () => {
+    let callbacks: TransportHandlers;
+    const online = internet.transport("a-online");
+    const traced: Transport = {
+      ...online,
+      join: (id, options, handlers) => {
+        callbacks = handlers;
+        return online.join(id, options, handlers);
+      },
+    };
+    const a = createPeer(null, "a", { transport: createCombinedTransport("a", [nearby.transport("a-qr"), traced]) });
+    const b = createPeer(null, "b", { transport: createCombinedTransport("b", [nearby.transport("b-qr")]) });
+    nodes.push(a, b);
+    a.follow("G");
+    b.follow("G");
+    await settle(2000);
+    callbacks.onConnectionFailure({ stage: "peer-connection", transport: "webrtc", message: "after exchanging SDP" });
+    expect(a.node.getConnection("G").connectionFailure?.stage).toBe("peer-connection");
+    expect(a.node.getConnection("G").peers).toHaveLength(1);
+    expect(a.node.getConnection("G").status).toBe("connected");
+    callbacks.onConnectionFailure(null);
+    expect(a.node.getConnection("G").connectionFailure).toBeNull();
+  });
   it("shows each peer once and delivers each message once with both paths available", async () => {
     const a = await join(transport("a"));
     const b = await join(transport("b"));

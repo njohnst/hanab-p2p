@@ -12,6 +12,14 @@ import { JoinOptions, Transport, TransportHandlers, TransportRoom, transportUnav
 export const TRYSTERO_APP_ID = "hanab-p2p";
 /** Action carrying every message (Trystero limits action names to 32 bytes). */
 const ACTION = "hanab";
+// Keep the app's existing relay selection except nostr.tegila.com.br, which
+// failed TLS hostname validation. Explicit URLs prevent retries to that host.
+const RELAY_URLS = [
+  "wss://relay.artio.inf.unibe.ch",
+  "wss://nostr-01.yakihonne.com",
+  "wss://nostr.sathoarder.com",
+  "wss://nostr-01.uid.ovh",
+];
 
 export interface TrysteroTransportOptions {
   appId?: string;
@@ -62,17 +70,31 @@ export function createTrysteroTransport(options: TrysteroTransportOptions = {}):
           appId,
           password: joinOptions.password,
           turnConfig: options.iceServers?.length ? options.iceServers : undefined,
-          relayConfig: { warnOnRelayFailure: false },
+          relayConfig: { urls: RELAY_URLS, warnOnRelayFailure: false },
         },
         roomId,
         {
-          onJoinError: (details) => dispatch(() => handlers.onError?.(details.error)),
+          onJoinError: (details) =>
+            dispatch(() => {
+              if (details.error.includes("after exchanging SDP")) {
+                handlers.onConnectionFailure?.({
+                  stage: "peer-connection",
+                  transport: "webrtc",
+                  message: details.error,
+                });
+              }
+              handlers.onError?.(details.error);
+            }),
         }
       );
 
       const action = room.makeAction<JsonValue>(ACTION);
       action.onMessage = (data, context) => dispatch(() => handlers.onMessage(data, context.peerId));
-      room.onPeerJoin = (peerId) => dispatch(() => handlers.onPeerJoin(peerId));
+      room.onPeerJoin = (peerId) =>
+        dispatch(() => {
+          handlers.onConnectionFailure?.(null);
+          handlers.onPeerJoin(peerId);
+        });
       room.onPeerLeave = (peerId) => dispatch(() => handlers.onPeerLeave(peerId));
 
       setTimeout(() => {
